@@ -15,6 +15,13 @@ const PEOPLE = ['Bokx', 'Missy', 'Joint'];
 const AVATAR = { bokx: 'img/bokx.png', missy: 'img/missy.png', girl: 'img/girl.png', sky: 'img/sky.png' };
 const PIE = ['#9C8BE0', '#7FC3A0', '#7FA8DD', '#F2A7C3', '#F3C77A', '#76C6C4', '#C3A6EE', '#A8CDEB', '#E9B79A', '#B5D98C'];
 
+const PHONE_BILLS = [
+  { id: 'bill_du_missy', name: "Missy's du", amount: 15000, freq: 'monthly', month: 1, icon: '📱', group: 'Phone & Internet' },
+  { id: 'bill_du_rolly', name: "Rolly's du", amount: 15000, freq: 'monthly', month: 1, icon: '📱', group: 'Phone & Internet' },
+  { id: 'bill_eand', name: 'Home Wireless (e&)', amount: 20000, freq: 'monthly', month: 1, icon: '📡', group: 'Phone & Internet' },
+];
+const GROUP_ICON = { 'Utilities': '💡', 'Phone & Internet': '📶', 'Pets': '🐾' };
+
 const DEFAULT_SETTINGS = {
   year: 2027,
   income: [
@@ -26,14 +33,15 @@ const DEFAULT_SETTINGS = {
   bills: [
     { id: 'bill_rent', name: 'Rent', amount: 500000, freq: 'monthly', month: 1, icon: '🏠' },
     { id: 'bill_school', name: 'School Fees', amount: 800000, freq: 'split', month: 9, icon: '🎒' },
-    { id: 'bill_elec', name: 'Electricity', amount: 25000, freq: 'monthly', month: 1, icon: '💡' },
-    { id: 'bill_water', name: 'Water', amount: 10000, freq: 'monthly', month: 1, icon: '💧' },
-    { id: 'bill_muni', name: 'Municipality Fee', amount: 15000, freq: 'monthly', month: 1, icon: '🏛️' },
-    { id: 'bill_phone', name: 'Phone & Internet', amount: 50000, freq: 'monthly', month: 1, icon: '📶' },
+    { id: 'bill_elec', name: 'Electricity', amount: 25000, freq: 'monthly', month: 1, icon: '💡', group: 'Utilities' },
+    { id: 'bill_water', name: 'Water', amount: 10000, freq: 'monthly', month: 1, icon: '💧', group: 'Utilities' },
+    { id: 'bill_muni', name: 'Municipality Fee', amount: 15000, freq: 'monthly', month: 1, icon: '🏛️', group: 'Utilities' },
+    ...PHONE_BILLS,
     { id: 'bill_ins', name: 'Insurance', amount: 200000, freq: 'yearly', month: 1, icon: '🛡️' },
     { id: 'bill_church', name: 'Church Giving', amount: 20000, freq: 'monthly', month: 1, icon: '⛪' },
-    { id: 'bill_sky', name: "Sky's Food", amount: 15000, freq: 'monthly', month: 1, icon: 'sky' },
+    { id: 'bill_sky', name: "Sky's Food", amount: 15000, freq: 'monthly', month: 1, icon: 'pet:pet_sky', group: 'Pets' },
   ],
+  pets: [{ id: 'pet_sky', name: 'Sky', icon: 'sky' }],
   categories: [
     { id: 'cat_groc', name: 'Groceries', limit: 150000, icon: '🛒' },
     { id: 'cat_dine', name: 'Dining Out', limit: 60000, icon: '🍽️' },
@@ -50,22 +58,33 @@ const DEFAULT_SETTINGS = {
     { id: 'goal_school', name: 'School Savings', target: 0, monthly: 0, start: 0, icon: '🎓' },
   ],
   methods: ['Cash', 'Debit Card', 'Credit Card', 'Google Pay'],
-  migrated: ['util-split'],
+  migrated: ['util-split', 'groups-v1'],
 };
 
 // One-time updates to a budget that was already set up.
 function migrate(s) {
   const done = s.migrated || [];
-  if (done.includes('util-split')) return null;
+  if (done.includes('util-split') && done.includes('groups-v1')) return null;
   const out = clone(s);
-  const i = out.bills.findIndex(b => b.id === 'bill_util');
-  if (i >= 0) {
-    out.bills.splice(i, 1,
-      { id: 'bill_elec', name: 'Electricity', amount: 25000, freq: 'monthly', month: 1, icon: '💡' },
-      { id: 'bill_water', name: 'Water', amount: 10000, freq: 'monthly', month: 1, icon: '💧' },
-      { id: 'bill_muni', name: 'Municipality Fee', amount: 15000, freq: 'monthly', month: 1, icon: '🏛️' });
+  out.bills = out.bills || [];
+  if (!done.includes('util-split')) {
+    const i = out.bills.findIndex(b => b.id === 'bill_util');
+    if (i >= 0) {
+      out.bills.splice(i, 1,
+        { id: 'bill_elec', name: 'Electricity', amount: 25000, freq: 'monthly', month: 1, icon: '💡' },
+        { id: 'bill_water', name: 'Water', amount: 10000, freq: 'monthly', month: 1, icon: '💧' },
+        { id: 'bill_muni', name: 'Municipality Fee', amount: 15000, freq: 'monthly', month: 1, icon: '🏛️' });
+    }
   }
-  out.migrated = [...done, 'util-split'];
+  if (!done.includes('groups-v1')) {
+    out.bills.forEach(b => { if (['bill_elec', 'bill_water', 'bill_muni'].includes(b.id)) b.group = 'Utilities'; });
+    const i = out.bills.findIndex(b => b.id === 'bill_phone');
+    if (i >= 0) out.bills.splice(i, 1, ...clone(PHONE_BILLS));
+    if (!out.pets || !out.pets.length) out.pets = [{ id: 'pet_sky', name: 'Sky', icon: 'sky' }];
+    const sky = out.bills.find(b => b.id === 'bill_sky');
+    if (sky) { sky.icon = 'pet:pet_sky'; sky.group = 'Pets'; }
+  }
+  out.migrated = [...new Set([...done, 'util-split', 'groups-v1'])];
   return out;
 }
 
@@ -94,14 +113,50 @@ function toFils(str) {
 }
 const filsToInput = f => f ? (f / 100).toFixed(2).replace(/\.00$/, '') : '';
 
+// An icon is an emoji, a family picture name (bokx, missy, girl, sky),
+// an uploaded photo (data:image...) or a pet link (pet:<id>).
+function iconParts(ic) {
+  if (typeof ic === 'string' && ic.startsWith('pet:')) {
+    const pet = ((S.draft || S.settings)?.pets || []).find(x => x.id === ic.slice(4));
+    ic = pet ? pet.icon : '🐾';
+  }
+  if (AVATAR[ic]) return { src: AVATAR[ic], cat: ic === 'sky' };
+  if (typeof ic === 'string' && ic.startsWith('data:image')) return { src: ic };
+  return { emoji: ic || '•' };
+}
 function icon(ic, cls = '') {
-  if (AVATAR[ic]) return `<div class="ico ${ic === 'sky' ? '' : 'round'} ${cls}"><img src="${AVATAR[ic]}" alt="" class="${ic === 'sky' ? 'cat' : ''}"></div>`;
-  return `<div class="ico ${cls}">${esc(ic || '•')}</div>`;
+  const p = iconParts(ic);
+  if (p.src) return `<div class="ico ${p.cat ? '' : 'round'} ${cls}"><img src="${esc(p.src)}" alt="" class="${p.cat ? 'cat' : ''}"></div>`;
+  return `<div class="ico ${cls}">${esc(p.emoji)}</div>`;
 }
 function smallIcon(ic) {
-  if (AVATAR[ic]) return `<img src="${AVATAR[ic]}" alt="" class="${ic === 'sky' ? 'cat' : ''}">`;
-  return `<span>${esc(ic || '•')}</span>`;
+  const p = iconParts(ic);
+  if (p.src) return `<img src="${esc(p.src)}" alt="" class="${p.cat ? 'cat' : ''}">`;
+  return `<span>${esc(p.emoji)}</span>`;
 }
+const isPicIcon = ic => typeof ic === 'string' && (ic.startsWith('pet:') || ic.startsWith('data:'));
+
+/* bill groups: keep the order of Settings, a group sits where its first bill is */
+function billGroups(bills) {
+  const out = [], map = {};
+  bills.forEach(b => {
+    const g = (b.group || '').trim();
+    if (!g) { out.push({ single: b }); return; }
+    if (!map[g]) { map[g] = { name: g, items: [] }; out.push(map[g]); }
+    map[g].items.push(b);
+  });
+  return out;
+}
+function groupIcon(g) {
+  if (GROUP_ICON[g.name]) return GROUP_ICON[g.name];
+  return g.items[0]?.icon || '📁';
+}
+const openGroups = new Set((() => { try { return JSON.parse(localStorage.getItem('tsn-open') || '[]'); } catch { return []; } })());
+function toggleGroup(name) {
+  openGroups.has(name) ? openGroups.delete(name) : openGroups.add(name);
+  try { localStorage.setItem('tsn-open', JSON.stringify([...openGroups])); } catch { /* */ }
+}
+const chev = open => `<svg class="chev ${open ? 'open' : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>`;
 function personAv(p) {
   if (p === 'Bokx') return `<img src="${AVATAR.bokx}" alt="">`;
   if (p === 'Missy') return `<img src="${AVATAR.missy}" alt="">`;
@@ -282,7 +337,12 @@ function render() {
 }
 
 function familyStrip() {
-  return `<div class="family"><img src="${AVATAR.bokx}" alt="Bokx"><img src="${AVATAR.missy}" alt="Missy"><img src="${AVATAR.girl}" alt=""><img src="${AVATAR.sky}" alt="Sky" class="cat"></div>`;
+  const pets = (S.settings?.pets || []).slice(0, 3).map(p => {
+    const ip = iconParts(p.icon);
+    if (ip.src) return `<img src="${esc(ip.src)}" alt="${esc(p.name)}" class="${ip.cat ? 'cat' : ''}">`;
+    return `<span class="pet-emoji" title="${esc(p.name)}">${esc(ip.emoji)}</span>`;
+  }).join('');
+  return `<div class="family"><img src="${AVATAR.bokx}" alt="Bokx"><img src="${AVATAR.missy}" alt="Missy"><img src="${AVATAR.girl}" alt="">${pets}</div>`;
 }
 
 function hero(title, withMonth) {
@@ -401,13 +461,7 @@ function homeView() {
 
     <div class="sec-title"><h2><span class="dot" style="background:var(--purple)"></span>Bills</h2><span class="meta">${unpaid ? `${unpaid} to pay` : visibleBills.length ? 'All paid 🎉' : ''}</span></div>
     <section class="card">
-      ${visibleBills.map(b => `<div class="row">
-        ${icon(b.icon)}
-        <div class="main"><div class="name">${esc(b.name)}</div>
-          <div class="detail num">${b.freq === 'split' ? `${money(b.plan)} monthly share` : money(b.plan)}${b.paid && b.paid !== b.plan ? ` · paid ${money(b.paid)}` : ''}</div></div>
-        ${b.status === 'paid' ? `<span class="pill paid">Paid</span>`
-          : `<button class="act" data-act="quick" data-kind="bill" data-ref="${b.id}">Pay</button>`}
-      </div>`).join('') || '<div class="empty">No bills this month.</div>'}
+      ${billGroups(visibleBills).map(g => g.single ? billRow(g.single) : billGroupRow(g)).join('') || '<div class="empty">No bills this month.</div>'}
       ${hiddenBills ? `<div class="detail" style="font-size:12.5px;color:var(--muted);font-weight:700;padding-top:8px">${hiddenBills} yearly bill${hiddenBills > 1 ? 's' : ''} not due this month. <button data-act="add" data-kind="bill" style="color:var(--purple);font-weight:900">Log a payment</button></div>` : ''}
     </section>
 
@@ -452,6 +506,31 @@ function homeView() {
     </section>
     <div class="foot">${DEMO ? 'Preview mode · entries stay on this device' : 'Synced for Bokx & Missy'}</div>
   </main>`;
+}
+
+function billRow(b, sub = false) {
+  return `<div class="row ${sub ? 'sub-row' : ''}">
+    ${icon(b.icon)}
+    <div class="main"><div class="name">${esc(b.name)}</div>
+      <div class="detail num">${b.freq === 'split' ? `${money(b.plan)} monthly share` : money(b.plan)}${b.paid && b.paid !== b.plan ? ` · paid ${money(b.paid)}` : ''}</div></div>
+    ${b.status === 'paid' ? `<span class="pill paid">Paid</span>`
+      : `<button class="act" data-act="quick" data-kind="bill" data-ref="${b.id}">Pay</button>`}
+  </div>`;
+}
+function billGroupRow(g) {
+  const open = openGroups.has(g.name);
+  const plan = sum(g.items, b => b.plan), paid = sum(g.items, b => b.paid);
+  const nPaid = g.items.filter(b => b.status === 'paid').length, n = g.items.length;
+  const pill = nPaid === n ? `<span class="pill paid">Paid</span>`
+    : nPaid > 0 || paid > 0 ? `<span class="pill part">${nPaid}/${n} paid</span>`
+    : `<span class="pill due">${n} to pay</span>`;
+  return `<div class="row grp" data-act="toggle" data-g="${esc(g.name)}" role="button" aria-expanded="${open}">
+    ${icon(groupIcon(g))}
+    <div class="main"><div class="name">${esc(g.name)}</div>
+      <div class="detail num">${n} bill${n > 1 ? 's' : ''} · ${money(plan)}${paid && paid !== plan ? ` · paid ${money(paid)}` : ''}</div></div>
+    ${pill}${chev(open)}
+  </div>
+  ${open ? `<div class="grp-items">${g.items.map(b => billRow(b, true)).join('')}</div>` : ''}`;
 }
 
 /* ---------------- YEAR ---------------- */
@@ -545,11 +624,21 @@ function yearView() {
 
     <div class="sec-title"><h2><span class="dot" style="background:var(--purple)"></span>Bills paid this year</h2></div>
     <section class="card">
-      ${bills.map(b => {
-        const p = b.yplan ? b.paid / b.yplan : 0;
-        return `<div class="row">${icon(b.icon)}<div class="main"><div class="name">${esc(b.name)}</div>
-          <div class="bar purple"><i style="width:${Math.min(p, 1) * 100}%"></i></div>
-          <div class="cat-line num"><span>${money(b.paid)} paid</span><span>${money(Math.max(b.yplan - b.paid, 0))} to go</span></div></div></div>`;
+      ${billGroups(bills).map(g => {
+        const one = (b, cls = '') => {
+          const p = b.yplan ? b.paid / b.yplan : 0;
+          return `<div class="row ${cls}">${icon(b.icon)}<div class="main"><div class="name">${esc(b.name)}</div>
+            <div class="bar purple"><i style="width:${Math.min(p, 1) * 100}%"></i></div>
+            <div class="cat-line num"><span>${money(b.paid)} paid</span><span>${money(Math.max(b.yplan - b.paid, 0))} to go</span></div></div></div>`;
+        };
+        if (g.single) return one(g.single);
+        const open = openGroups.has(g.name);
+        const tot = { yplan: sum(g.items, b => b.yplan), paid: sum(g.items, b => b.paid) };
+        const p = tot.yplan ? tot.paid / tot.yplan : 0;
+        return `<div class="row grp" data-act="toggle" data-g="${esc(g.name)}" role="button" aria-expanded="${open}">${icon(groupIcon(g))}<div class="main"><div class="name">${esc(g.name)}</div>
+            <div class="bar purple"><i style="width:${Math.min(p, 1) * 100}%"></i></div>
+            <div class="cat-line num"><span>${money(tot.paid)} paid</span><span>${money(Math.max(tot.yplan - tot.paid, 0))} to go</span></div></div>${chev(open)}</div>
+          ${open ? `<div class="grp-items">${g.items.map(b => one(b, 'sub-row')).join('')}</div>` : ''}`;
       }).join('')}
     </section>
 
@@ -646,7 +735,14 @@ function renderSheet(focus) {
     <div class="seg">${Object.entries(KIND_LABEL).map(([k, l]) => `<button data-act="kind" data-k="${k}" class="${sheet.kind === k ? 'on' : ''}">${l}</button>`).join('')}</div>
     <div class="amount-in"><span>AED</span><input id="amt" inputmode="decimal" placeholder="0.00" value="${esc(sheet.amount)}" autocomplete="off" aria-label="Amount"></div>
     <div class="field-label">${{ expense: 'Category', bill: 'Bill', income: 'Income', saving: 'Goal' }[sheet.kind]}</div>
-    <div class="pick">${pool.map(x => `<button data-act="ref" data-id="${x.id}" class="${sheet.ref === x.id ? 'on' : ''}">${smallIcon(x.icon)}${esc(x.name)}</button>`).join('')}</div>
+    ${(() => {
+      const chip = x => `<button data-act="ref" data-id="${x.id}" class="${sheet.ref === x.id ? 'on' : ''}">${smallIcon(x.icon)}${esc(x.name)}</button>`;
+      if (sheet.kind !== 'bill') return `<div class="pick">${pool.map(chip).join('')}</div>`;
+      const groups = billGroups(pool);
+      const singles = groups.filter(g => g.single).map(g => g.single);
+      return `<div class="pick">${singles.map(chip).join('')}</div>` +
+        groups.filter(g => !g.single).map(g => `<div class="pick-group">${esc(g.name)}</div><div class="pick">${g.items.map(chip).join('')}</div>`).join('');
+    })()}
     <div class="field-label">${sheet.kind === 'income' ? 'Received by' : sheet.kind === 'saving' ? 'Saved by' : 'Spent by'}</div>
     <div class="pick">${PEOPLE.map(p => `<button data-act="who" data-p="${p}" class="${sheet.who === p ? 'on' : ''}">${personAv(p) || '👫'}${p}</button>`).join('')}</div>
     ${showMethod ? `<div class="field-label">Paid with</div>
@@ -713,6 +809,10 @@ function ensureDraft() { if (!S.draft) S.draft = clone(S.settings); return S.dra
 function moneyInput(path, val) {
   return `<div class="money"><input class="inp num" inputmode="decimal" data-set="${path}" data-type="money" value="${esc(filsToInput(val))}" placeholder="0"></div>`;
 }
+function iconField(path, val) {
+  if (isPicIcon(val)) return `<div class="icon-static">${smallIcon(val)}</div>`;
+  return textInput(path, val, '', 'icon-inp');
+}
 function textInput(path, val, ph = '', cls = '') {
   return `<input class="inp ${cls}" data-set="${path}" value="${esc(val)}" placeholder="${esc(ph)}">`;
 }
@@ -742,11 +842,28 @@ function settingsView() {
       <button class="add-row" data-act="addrow" data-list="income">+ Add income</button>
     </section>
 
+    <div class="sec-title"><h2><span class="dot" style="background:#E9A0BD"></span>Pets</h2></div>
+    <section class="card">
+      ${(d.pets || []).map((x, i) => `<div class="set-row">
+        <div class="line">
+          <button class="pet-pic" data-act="petphoto" data-i="${i}" aria-label="Change photo">${smallIcon(x.icon)}<span class="cam">📷</span></button>
+          ${textInput(`pets.${i}.name`, x.name, 'Pet name')}
+          <button class="x-btn" data-act="rm" data-list="pets" data-i="${i}" aria-label="Remove">×</button>
+        </div>
+        <div class="emoji-pick">${['🐶', '🐱', '🐰', '🐹', '🐦', '🐟', '🐢', '🐾'].map(em => `<button data-act="petemoji" data-i="${i}" data-e="${em}" class="${x.icon === em ? 'on' : ''}">${em}</button>`).join('')}</div>
+      </div>`).join('') || '<div class="detail" style="color:var(--muted);font-weight:700;font-size:13px">No pets yet.</div>'}
+      <button class="add-row" data-act="addrow" data-list="pets">+ Add a pet</button>
+      <div class="detail" style="color:var(--muted);font-weight:700;font-size:12.5px;margin-top:10px">Tap the picture to use a photo. Each pet gets its own food bill in the Pets group below. Set the amount there.</div>
+      <input type="file" id="petfile" accept="image/*" hidden>
+    </section>
+
     <div class="sec-title"><h2><span class="dot" style="background:var(--purple)"></span>Fixed bills</h2></div>
     <section class="card">
+      <datalist id="grp-list">${[...new Set(d.bills.map(b => (b.group || '').trim()).filter(Boolean))].map(g => `<option value="${esc(g)}">`).join('')}</datalist>
       ${d.bills.map((x, i) => `<div class="set-row">
-        <div class="line">${textInput(`bills.${i}.icon`, x.icon, '', 'icon-inp')}${textInput(`bills.${i}.name`, x.name, 'Name')}<button class="x-btn" data-act="rm" data-list="bills" data-i="${i}" aria-label="Remove">×</button></div>
+        <div class="line">${iconField(`bills.${i}.icon`, x.icon)}${textInput(`bills.${i}.name`, x.name, 'Name')}<button class="x-btn" data-act="rm" data-list="bills" data-i="${i}" aria-label="Remove">×</button></div>
         <div class="line">${moneyInput(`bills.${i}.amount`, x.amount)}${freqSel(`bills.${i}.freq`, x.freq)}</div>
+        <div class="line"><span class="mini" style="margin:0;flex:none">Group</span><input class="inp" list="grp-list" data-set="bills.${i}.group" value="${esc(x.group || '')}" placeholder="None (e.g. Utilities)"></div>
         ${x.freq !== 'monthly' ? `<div class="line"><span class="mini" style="margin:0;flex:none">${x.freq === 'yearly' ? 'Paid in' : 'Due in'}</span>${monthSel(`bills.${i}.month`, x.month)}</div>` : ''}
       </div>`).join('')}
       <button class="add-row" data-act="addrow" data-list="bills">+ Add bill</button>
@@ -806,12 +923,23 @@ function newRow(list) {
     categories: { id: uid('cat'), name: '', limit: 0, icon: '🏷️' },
     goals: { id: uid('goal'), name: '', target: 0, monthly: 0, start: 0, icon: '🎯' },
     methods: '',
+    pets: { id: uid('pet'), name: '', icon: '🐾' },
   }[list];
 }
 
 async function saveSettings() {
   const d = S.draft;
-  ['income', 'bills', 'categories', 'goals'].forEach(k => { d[k] = d[k].filter(x => x.name.trim()); d[k].forEach(x => { x.name = x.name.trim(); x.icon = (x.icon || '').trim() || '•'; }); });
+  d.pets = d.pets || [];
+  ['income', 'bills', 'categories', 'goals', 'pets'].forEach(k => { d[k] = d[k].filter(x => x.name.trim()); d[k].forEach(x => { x.name = x.name.trim(); x.icon = (x.icon || '').trim() || '•'; }); });
+  d.bills.forEach(b => { b.group = (b.group || '').trim(); });
+  // Each pet has a food bill in the Pets group; a removed pet takes its bill along.
+  const petIds = new Set(d.pets.map(p => p.id));
+  d.bills = d.bills.filter(b => !(b.icon || '').startsWith('pet:') || petIds.has(b.icon.slice(4)));
+  d.pets.forEach(p => {
+    if (!d.bills.some(b => b.icon === 'pet:' + p.id)) {
+      d.bills.push({ id: uid('bill'), name: `${p.name}'s Food`, amount: 0, freq: 'monthly', month: 1, icon: 'pet:' + p.id, group: 'Pets' });
+    }
+  });
   d.methods = d.methods.map(m => m.trim()).filter(Boolean);
   if (!d.methods.length) d.methods = ['Cash'];
   if (!(d.year >= 2000 && d.year <= 2100)) d.year = S.settings.year;
@@ -906,6 +1034,12 @@ document.addEventListener('click', async e => {
     case 'discard': S.draft = null; S.keepScroll = true; render(); break;
     case 'savesettings': await saveSettings(); S.keepScroll = true; render(); break;
     case 'export': exportCsv(); break;
+    case 'toggle': toggleGroup(el.dataset.g); S.keepScroll = true; render(); break;
+    case 'petphoto': S.petIdx = Number(el.dataset.i); $('#petfile')?.click(); break;
+    case 'petemoji': {
+      const d = ensureDraft(); d.pets[Number(el.dataset.i)].icon = el.dataset.e; S.keepScroll = true; render();
+      break;
+    }
     case 'clearall': {
       if (!S.tx.length) { toast('There are no entries to clear'); return; }
       const word = prompt(`This deletes all ${S.tx.length} entries for both of you and cannot be undone. Your settings (salaries, bills, limits, goals) stay.\n\nType DELETE to confirm.`);
@@ -940,7 +1074,32 @@ document.addEventListener('input', e => {
     if (!settingsDirty() && bar) bar.remove();
   }
 });
-document.addEventListener('change', e => {
+function resizeImage(file, size = 160) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = c.height = size;
+      const side = Math.min(img.width, img.height);
+      c.getContext('2d').drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, size, size);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+document.addEventListener('change', async e => {
+  if (e.target.id === 'petfile' && e.target.files?.[0]) {
+    try {
+      const data = await resizeImage(e.target.files[0]);
+      const d = ensureDraft();
+      if (d.pets[S.petIdx]) d.pets[S.petIdx].icon = data;
+      S.keepScroll = true; render();
+    } catch { toast('Could not read that photo'); }
+    return;
+  }
   // Frequency changes show or hide the month picker.
   if (e.target.dataset.set?.endsWith('.freq')) { S.keepScroll = true; render(); }
 });
