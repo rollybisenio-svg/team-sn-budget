@@ -336,3 +336,11 @@ main { padding: 0 14px calc(110px + var(--safe-b)); margin-top: -56px; position:
 .icon-static { width: 64px; height: 46px; flex: none; display: grid; place-content: center; border: 2px solid var(--line); border-radius: 14px; }
 .icon-static img { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; }
 .icon-static img.cat { object-fit: contain; border-radius: 0; }
+
+/* pets budget */
+.name-sub { font-size: 12px; color: var(--muted); font-weight: 700; }
+.pet-split { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 0 4px; border-top: 1px solid var(--line); }
+.pet-split span { display: inline-flex; align-items: center; gap: 6px; background: #fff; border-radius: 12px; padding: 6px 10px; font-size: 13px; font-weight: 800; }
+.pet-split img, .pet-split span > span { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; }
+.pet-split img.cat { object-fit: contain; border-radius: 0; }
+.pet-add { display: block; margin: 6px 0 10px auto; }

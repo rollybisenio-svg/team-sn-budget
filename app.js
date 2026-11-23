@@ -20,6 +20,12 @@ const PHONE_BILLS = [
   { id: 'bill_du_rolly', name: "Rolly's du", amount: 15000, freq: 'monthly', month: 1, icon: '📱', group: 'Phone & Internet' },
   { id: 'bill_eand', name: 'Home Wireless (e&)', amount: 20000, freq: 'monthly', month: 1, icon: '📡', group: 'Phone & Internet' },
 ];
+const PET_TYPES = [
+  { name: 'Food', icon: '🍗' },
+  { name: 'Cat Litter', icon: '🪣' },
+  { name: 'Medical', icon: '💊' },
+  { name: 'Grooming', icon: '✂️' },
+];
 const GROUP_ICON = { 'Utilities': '💡', 'Phone & Internet': '📶', 'Pets': '🐾' };
 
 const DEFAULT_SETTINGS = {
@@ -39,9 +45,9 @@ const DEFAULT_SETTINGS = {
     ...PHONE_BILLS,
     { id: 'bill_ins', name: 'Insurance', amount: 200000, freq: 'yearly', month: 1, icon: '🛡️' },
     { id: 'bill_church', name: 'Church Giving', amount: 20000, freq: 'monthly', month: 1, icon: '⛪' },
-    { id: 'bill_sky', name: "Sky's Food", amount: 15000, freq: 'monthly', month: 1, icon: 'pet:pet_sky', group: 'Pets' },
   ],
   pets: [{ id: 'pet_sky', name: 'Sky', icon: 'sky' }],
+  petTypes: PET_TYPES,
   categories: [
     { id: 'cat_groc', name: 'Groceries', limit: 150000, icon: '🛒' },
     { id: 'cat_dine', name: 'Dining Out', limit: 60000, icon: '🍽️' },
@@ -50,6 +56,7 @@ const DEFAULT_SETTINGS = {
     { id: 'cat_petrol', name: 'Petrol', limit: 40000, icon: '⛽' },
     { id: 'cat_tools', name: 'Daddy Tools', limit: 20000, icon: '🔧' },
     { id: 'cat_bike', name: 'Bicycle Parts', limit: 15000, icon: '🚲' },
+    { id: 'cat_pets', name: 'Pets', limit: 15000, icon: '🐾', pets: true },
     { id: 'cat_misc', name: 'Miscellaneous', limit: 30000, icon: '📦' },
   ],
   goals: [
@@ -58,13 +65,13 @@ const DEFAULT_SETTINGS = {
     { id: 'goal_school', name: 'School Savings', target: 0, monthly: 0, start: 0, icon: '🎓' },
   ],
   methods: ['Cash', 'Debit Card', 'Credit Card', 'Google Pay'],
-  migrated: ['util-split', 'groups-v1'],
+  migrated: ['util-split', 'groups-v1', 'pets-v2'],
 };
 
 // One-time updates to a budget that was already set up.
 function migrate(s) {
   const done = s.migrated || [];
-  if (done.includes('util-split') && done.includes('groups-v1')) return null;
+  if (['util-split', 'groups-v1', 'pets-v2'].every(k => done.includes(k))) return null;
   const out = clone(s);
   out.bills = out.bills || [];
   if (!done.includes('util-split')) {
@@ -84,7 +91,21 @@ function migrate(s) {
     const sky = out.bills.find(b => b.id === 'bill_sky');
     if (sky) { sky.icon = 'pet:pet_sky'; sky.group = 'Pets'; }
   }
-  out.migrated = [...new Set([...done, 'util-split', 'groups-v1'])];
+  if (!done.includes('pets-v2')) {
+    // Pet costs move from fixed bills to one Pets budget in everyday spending.
+    const petBills = out.bills.filter(b => (b.icon || '').startsWith('pet:') || b.id === 'bill_sky');
+    const budget = sum(petBills, b => b.amount || 0);
+    out.bills = out.bills.filter(b => !petBills.includes(b));
+    out.categories = out.categories || [];
+    if (!out.categories.some(c => c.pets)) {
+      const cat = { id: 'cat_pets', name: 'Pets', limit: budget || 15000, icon: '🐾', pets: true };
+      const mi = out.categories.findIndex(c => c.id === 'cat_misc');
+      mi >= 0 ? out.categories.splice(mi, 0, cat) : out.categories.push(cat);
+    }
+    if (!out.petTypes || !out.petTypes.length) out.petTypes = clone(PET_TYPES);
+    if (!out.pets || !out.pets.length) out.pets = [{ id: 'pet_sky', name: 'Sky', icon: 'sky' }];
+  }
+  out.migrated = [...new Set([...done, 'util-split', 'groups-v1', 'pets-v2'])];
   return out;
 }
 
@@ -469,6 +490,7 @@ function homeView() {
     <section class="card">
       ${st.cats.map(c => {
         const p = c.limit ? c.spent / c.limit : (c.spent ? 2 : 0);
+        if (c.pets) return petCatRow(c, p, st.list);
         return `<div class="row" data-act="add" data-kind="expense" data-ref="${c.id}" style="cursor:pointer">
           ${icon(c.icon)}
           <div class="main">
@@ -531,6 +553,33 @@ function billGroupRow(g) {
     ${pill}${chev(open)}
   </div>
   ${open ? `<div class="grp-items">${g.items.map(b => billRow(b, true)).join('')}</div>` : ''}`;
+}
+
+function petIcon(petId) { return petId ? 'pet:' + petId : '🐾'; }
+function petCatRow(c, p, list) {
+  const key = 'cat:' + c.id, open = openGroups.has(key);
+  const st = S.settings;
+  const items = list.filter(t => t.kind === 'expense' && t.ref === c.id);
+  const types = (st.petTypes || []).map(pt => ({ ...pt, v: sum(items.filter(t => t.sub === pt.name), t => t.amount) }));
+  const other = sum(items.filter(t => !(st.petTypes || []).some(pt => pt.name === t.sub)), t => t.amount);
+  const pets = st.pets || [];
+  const perPet = pets.map(pt => ({ ...pt, v: sum(items.filter(t => t.pet === pt.id), t => t.amount) }));
+  return `<div class="row grp" data-act="toggle" data-g="${esc(key)}" role="button" aria-expanded="${open}">
+    ${icon(pets.length === 1 ? petIcon(pets[0].id) : c.icon)}
+    <div class="main">
+      <div class="name">${esc(c.name)}${pets.length ? ` <span class="name-sub">${esc(pets.map(x => x.name).join(', '))}</span>` : ''}</div>
+      <div class="bar ${barClass(p)}"><i style="width:${Math.min(p, 1) * 100}%"></i></div>
+      <div class="cat-line num"><span>${money(c.spent)} spent</span><span class="${c.limit - c.spent < 0 ? 'over' : ''}">${c.limit - c.spent < 0 ? `${money(c.spent - c.limit)} over` : `${money(c.limit - c.spent)} left`}</span></div>
+    </div>${chev(open)}
+  </div>
+  ${open ? `<div class="grp-items">
+    ${types.map(t => `<div class="row sub-row" data-act="add" data-kind="expense" data-ref="${c.id}" data-sub="${esc(t.name)}" style="cursor:pointer">
+      ${icon(t.icon)}<div class="main"><div class="name">${esc(t.name)}</div></div>
+      <div class="amt num">${money(t.v)}</div></div>`).join('')}
+    ${other ? `<div class="row sub-row">${icon('•')}<div class="main"><div class="name">Other</div></div><div class="amt num">${money(other)}</div></div>` : ''}
+    ${pets.length > 1 ? `<div class="pet-split">${perPet.map(x => `<span>${smallIcon(petIcon(x.id))}${esc(x.name)} <b class="num">${money(x.v)}</b></span>`).join('')}</div>` : ''}
+    <button class="act soft pet-add" data-act="add" data-kind="expense" data-ref="${c.id}">+ Add pet expense</button>
+  </div>` : ''}`;
 }
 
 /* ---------------- YEAR ---------------- */
@@ -654,6 +703,11 @@ function refInfo(t) {
   const st = S.settings;
   const pools = { income: st.income, bill: st.bills, expense: st.categories, saving: st.goals };
   const item = (pools[t.kind] || []).find(x => x.id === t.ref);
+  if (t.kind === 'expense' && (item?.pets || t.pet)) {
+    const pet = (st.pets || []).find(x => x.id === t.pet);
+    const petName = pet?.name || t.petName || '';
+    return { name: [petName, t.sub].filter(Boolean).join(' · ') || item?.name || 'Pets', icon: pet ? petIcon(pet.id) : '🐾' };
+  }
   return { name: item?.name || t.refName || 'Removed item', icon: item?.icon || t.refIcon || '•' };
 }
 
@@ -662,7 +716,7 @@ function historyView() {
   let list = h.scope === 'month' ? txOfMonth(S.y, S.m) : S.tx.slice();
   if (h.who !== 'all') list = list.filter(t => t.who === h.who);
   const q = h.q.trim().toLowerCase();
-  if (q) list = list.filter(t => (refInfo(t).name + ' ' + (t.note || '') + ' ' + (t.method || '')).toLowerCase().includes(q));
+  if (q) list = list.filter(t => (refInfo(t).name + ' ' + (t.sub ? 'pets ' : '') + (t.note || '') + ' ' + (t.method || '')).toLowerCase().includes(q));
   list.sort((a, b) => b.date.localeCompare(a.date) || String(b.id).localeCompare(String(a.id)));
 
   const groups = {};
@@ -708,14 +762,23 @@ function openSheet(opts = {}) {
   if (opts.id) {
     const t = S.tx.find(x => x.id === opts.id);
     if (!t) return;
-    sheet = { id: t.id, kind: t.kind, ref: t.ref, amount: filsToInput(t.amount), who: t.who, method: t.method || st.methods[0], date: t.date, note: t.note || '' };
+    sheet = { id: t.id, kind: t.kind, ref: t.ref, amount: filsToInput(t.amount), who: t.who, method: t.method || st.methods[0], date: t.date, note: t.note || '', pet: t.pet || null, sub: t.sub || null };
   } else {
     const kind = opts.kind || 'expense';
     sheet = { id: null, kind, ref: opts.ref || null, amount: '', who: S.me || 'Bokx', method: store.get('tsn-method') || st.methods[1] || st.methods[0], date: defaultDate(), note: '' };
     if (!sheet.ref) sheet.ref = poolFor(kind)[0]?.id || null;
     if (kind === 'income') { const inc = st.income.find(i => i.id === sheet.ref); if (inc?.icon === 'missy') sheet.who = 'Missy'; if (inc?.icon === 'bokx') sheet.who = 'Bokx'; }
+    sheet.sub = opts.sub || null;
   }
+  fillPetDefaults();
   renderSheet(true);
+}
+function isPetCat(ref) { return !!S.settings.categories.find(c => c.id === ref)?.pets; }
+function fillPetDefaults() {
+  if (!sheet || sheet.kind !== 'expense' || !isPetCat(sheet.ref)) return;
+  const st = S.settings;
+  if (!sheet.pet || !(st.pets || []).some(p => p.id === sheet.pet)) sheet.pet = st.pets?.[0]?.id || null;
+  if (!sheet.sub) sheet.sub = st.petTypes?.[0]?.name || null;
 }
 function poolFor(kind) {
   const st = S.settings;
@@ -743,6 +806,11 @@ function renderSheet(focus) {
       return `<div class="pick">${singles.map(chip).join('')}</div>` +
         groups.filter(g => !g.single).map(g => `<div class="pick-group">${esc(g.name)}</div><div class="pick">${g.items.map(chip).join('')}</div>`).join('');
     })()}
+    ${sheet.kind === 'expense' && isPetCat(sheet.ref) ? `
+      ${(st.pets || []).length > 1 ? `<div class="field-label">Which pet</div>
+      <div class="pick">${st.pets.map(pt => `<button data-act="pet" data-id="${pt.id}" class="${sheet.pet === pt.id ? 'on' : ''}">${smallIcon(petIcon(pt.id))}${esc(pt.name)}</button>`).join('')}</div>` : ''}
+      <div class="field-label">${(st.pets || []).length === 1 ? `For ${esc(st.pets[0].name)}` : 'Type'}</div>
+      <div class="pick">${(st.petTypes || []).map(pt => `<button data-act="sub" data-n="${esc(pt.name)}" class="${sheet.sub === pt.name ? 'on' : ''}">${smallIcon(pt.icon)}${esc(pt.name)}</button>`).join('')}</div>` : ''}
     <div class="field-label">${sheet.kind === 'income' ? 'Received by' : sheet.kind === 'saving' ? 'Saved by' : 'Spent by'}</div>
     <div class="pick">${PEOPLE.map(p => `<button data-act="who" data-p="${p}" class="${sheet.who === p ? 'on' : ''}">${personAv(p) || '👫'}${p}</button>`).join('')}</div>
     ${showMethod ? `<div class="field-label">Paid with</div>
@@ -777,6 +845,10 @@ async function saveSheet() {
     amount, who: sheet.who, method: showMethod ? sheet.method : '', date: sheet.date, note: sheet.note.trim(),
     by: S.me || '',
   };
+  if (sheet.kind === 'expense' && isPetCat(sheet.ref)) {
+    const pet = (S.settings.pets || []).find(x => x.id === sheet.pet);
+    t.pet = sheet.pet || ''; t.petName = pet?.name || ''; t.sub = sheet.sub || '';
+  } else { t.pet = ''; t.petName = ''; t.sub = ''; }
   if (showMethod) store.set('tsn-method', sheet.method);
   const id = sheet.id;
   closeSheet();
@@ -853,8 +925,11 @@ function settingsView() {
         <div class="emoji-pick">${['🐶', '🐱', '🐰', '🐹', '🐦', '🐟', '🐢', '🐾'].map(em => `<button data-act="petemoji" data-i="${i}" data-e="${em}" class="${x.icon === em ? 'on' : ''}">${em}</button>`).join('')}</div>
       </div>`).join('') || '<div class="detail" style="color:var(--muted);font-weight:700;font-size:13px">No pets yet.</div>'}
       <button class="add-row" data-act="addrow" data-list="pets">+ Add a pet</button>
-      <div class="detail" style="color:var(--muted);font-weight:700;font-size:12.5px;margin-top:10px">Tap the picture to use a photo. Each pet gets its own food bill in the Pets group below. Set the amount there.</div>
+      <div class="detail" style="color:var(--muted);font-weight:700;font-size:12.5px;margin-top:10px">Tap the picture to use a photo. The monthly Pets budget is under Everyday spending limits.</div>
       <input type="file" id="petfile" accept="image/*" hidden>
+      <div class="field-label">Pet expense types</div>
+      ${(d.petTypes || []).map((x, i) => `<div class="set-row"><div class="line">${textInput(`petTypes.${i}.icon`, x.icon, '', 'icon-inp')}${textInput(`petTypes.${i}.name`, x.name, 'Type')}<button class="x-btn" data-act="rm" data-list="petTypes" data-i="${i}" aria-label="Remove">×</button></div></div>`).join('')}
+      <button class="add-row" data-act="addrow" data-list="petTypes">+ Add type</button>
     </section>
 
     <div class="sec-title"><h2><span class="dot" style="background:var(--purple)"></span>Fixed bills</h2></div>
@@ -924,6 +999,7 @@ function newRow(list) {
     goals: { id: uid('goal'), name: '', target: 0, monthly: 0, start: 0, icon: '🎯' },
     methods: '',
     pets: { id: uid('pet'), name: '', icon: '🐾' },
+    petTypes: { name: '', icon: '🐾' },
   }[list];
 }
 
@@ -932,14 +1008,10 @@ async function saveSettings() {
   d.pets = d.pets || [];
   ['income', 'bills', 'categories', 'goals', 'pets'].forEach(k => { d[k] = d[k].filter(x => x.name.trim()); d[k].forEach(x => { x.name = x.name.trim(); x.icon = (x.icon || '').trim() || '•'; }); });
   d.bills.forEach(b => { b.group = (b.group || '').trim(); });
-  // Each pet has a food bill in the Pets group; a removed pet takes its bill along.
-  const petIds = new Set(d.pets.map(p => p.id));
-  d.bills = d.bills.filter(b => !(b.icon || '').startsWith('pet:') || petIds.has(b.icon.slice(4)));
-  d.pets.forEach(p => {
-    if (!d.bills.some(b => b.icon === 'pet:' + p.id)) {
-      d.bills.push({ id: uid('bill'), name: `${p.name}'s Food`, amount: 0, freq: 'monthly', month: 1, icon: 'pet:' + p.id, group: 'Pets' });
-    }
-  });
+  d.petTypes = (d.petTypes || []).filter(x => x.name.trim()).map(x => ({ name: x.name.trim(), icon: (x.icon || '').trim() || '🐾' }));
+  if (d.pets.length && !d.categories.some(c => c.pets)) {
+    d.categories.push({ id: 'cat_pets', name: 'Pets', limit: 0, icon: '🐾', pets: true });
+  }
   d.methods = d.methods.map(m => m.trim()).filter(Boolean);
   if (!d.methods.length) d.methods = ['Cash'];
   if (!(d.year >= 2000 && d.year <= 2100)) d.year = S.settings.year;
@@ -993,7 +1065,7 @@ document.addEventListener('click', async e => {
       break;
     }
     case 'year': S.y += Number(el.dataset.d); render(); break;
-    case 'add': openSheet({ kind: el.dataset.kind, ref: el.dataset.ref }); break;
+    case 'add': openSheet({ kind: el.dataset.kind, ref: el.dataset.ref, sub: el.dataset.sub }); break;
     case 'quick': quickAdd(el.dataset.kind, el.dataset.ref); break;
     case 'edit': openSheet({ id: el.dataset.id }); break;
     case 'close': closeSheet(); break;
@@ -1003,11 +1075,13 @@ document.addEventListener('click', async e => {
       renderSheet(false);
       break;
     case 'ref':
-      readSheetInputs(); sheet.ref = el.dataset.id;
+      readSheetInputs(); sheet.ref = el.dataset.id; fillPetDefaults();
       if (sheet.kind === 'income') { const inc = S.settings.income.find(i => i.id === sheet.ref); if (inc?.icon === 'missy') sheet.who = 'Missy'; if (inc?.icon === 'bokx') sheet.who = 'Bokx'; }
       renderSheet(false);
       break;
     case 'who': readSheetInputs(); sheet.who = el.dataset.p; renderSheet(false); break;
+    case 'pet': readSheetInputs(); sheet.pet = el.dataset.id; renderSheet(false); break;
+    case 'sub': readSheetInputs(); sheet.sub = el.dataset.n; renderSheet(false); break;
     case 'method': readSheetInputs(); sheet.method = el.dataset.m; renderSheet(false); break;
     case 'save': saveSheet(); break;
     case 'delete': {
