@@ -26,7 +26,9 @@ const DEFAULT_SETTINGS = {
   bills: [
     { id: 'bill_rent', name: 'Rent', amount: 500000, freq: 'monthly', month: 1, icon: '🏠' },
     { id: 'bill_school', name: 'School Fees', amount: 800000, freq: 'split', month: 9, icon: '🎒' },
-    { id: 'bill_util', name: 'Utilities', amount: 50000, freq: 'monthly', month: 1, icon: '💡' },
+    { id: 'bill_elec', name: 'Electricity', amount: 25000, freq: 'monthly', month: 1, icon: '💡' },
+    { id: 'bill_water', name: 'Water', amount: 10000, freq: 'monthly', month: 1, icon: '💧' },
+    { id: 'bill_muni', name: 'Municipality Fee', amount: 15000, freq: 'monthly', month: 1, icon: '🏛️' },
     { id: 'bill_phone', name: 'Phone & Internet', amount: 50000, freq: 'monthly', month: 1, icon: '📶' },
     { id: 'bill_ins', name: 'Insurance', amount: 200000, freq: 'yearly', month: 1, icon: '🛡️' },
     { id: 'bill_church', name: 'Church Giving', amount: 20000, freq: 'monthly', month: 1, icon: '⛪' },
@@ -48,7 +50,24 @@ const DEFAULT_SETTINGS = {
     { id: 'goal_school', name: 'School Savings', target: 0, monthly: 0, start: 0, icon: '🎓' },
   ],
   methods: ['Cash', 'Debit Card', 'Credit Card', 'Google Pay'],
+  migrated: ['util-split'],
 };
+
+// One-time updates to a budget that was already set up.
+function migrate(s) {
+  const done = s.migrated || [];
+  if (done.includes('util-split')) return null;
+  const out = clone(s);
+  const i = out.bills.findIndex(b => b.id === 'bill_util');
+  if (i >= 0) {
+    out.bills.splice(i, 1,
+      { id: 'bill_elec', name: 'Electricity', amount: 25000, freq: 'monthly', month: 1, icon: '💡' },
+      { id: 'bill_water', name: 'Water', amount: 10000, freq: 'monthly', month: 1, icon: '💧' },
+      { id: 'bill_muni', name: 'Municipality Fee', amount: 15000, freq: 'monthly', month: 1, icon: '🏛️' });
+  }
+  out.migrated = [...done, 'util-split'];
+  return out;
+}
 
 /* ---------------- helpers ---------------- */
 const $ = (s, el = document) => el.querySelector(s);
@@ -948,6 +967,8 @@ function subscribe() {
       try { await S.be.saveSettings(clone(DEFAULT_SETTINGS)); } catch (e) { onErr(e); }
       return;
     }
+    const upgraded = migrate(s);
+    if (upgraded) { try { await S.be.saveSettings(upgraded); } catch (e) { onErr(e); } return; }
     const first = !S.loaded.s;
     S.settings = { ...clone(DEFAULT_SETTINGS), ...s };
     S.loaded.s = true;

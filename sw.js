@@ -1,5 +1,5 @@
 // Keeps the app shell available offline. Data sync is handled by Firestore.
-const CACHE = 'team-sn-v2';
+const CACHE = 'team-sn-v3';
 const SHELL = [
   './', 'index.html', 'styles.css', 'app.js', 'firebase-config.js', 'manifest.webmanifest',
   'img/bokx.png', 'img/missy.png', 'img/girl.png', 'img/sky.png', 'img/icon-192.png'
