@@ -142,6 +142,16 @@ async function firebaseBackend() {
     addTx: t => F.addDoc(txCol, { ...t, createdAt: F.serverTimestamp() }),
     updateTx: (id, t) => F.updateDoc(F.doc(txCol, id), t),
     deleteTx: id => F.deleteDoc(F.doc(txCol, id)),
+    async clearTx() {
+      const snap = await F.getDocs(txCol);
+      const docs = snap.docs;
+      for (let i = 0; i < docs.length; i += 400) {
+        const b = F.writeBatch(db);
+        docs.slice(i, i + 400).forEach(d => b.delete(d.ref));
+        await b.commit();
+      }
+      return docs.length;
+    },
   };
 }
 
@@ -162,6 +172,7 @@ function demoBackend() {
     async addTx(t) { data.tx.push({ ...t, id: uid('tx') }); persist(); },
     async updateTx(id, t) { const i = data.tx.findIndex(x => x.id === id); if (i >= 0) data.tx[i] = { ...data.tx[i], ...t }; persist(); },
     async deleteTx(id) { data.tx = data.tx.filter(x => x.id !== id); persist(); },
+    async clearTx() { const n = data.tx.length; data.tx = []; persist(); return n; },
   };
 }
 
@@ -751,6 +762,7 @@ function settingsView() {
     <section class="card">
       <div class="detail" style="font-size:13px;color:var(--muted);font-weight:700">Icons: use any emoji, or type bokx, missy, girl or sky for the family pictures.</div>
       <button class="link-btn" data-act="export">Download all entries (CSV for Excel)</button>
+      <button class="link-btn" data-act="clearall" style="color:var(--red)">Clear all entries (${S.tx.length})</button>
       <button class="link-btn" data-act="signout" style="color:var(--red)">Sign out${S.user?.email && !DEMO ? ` (${esc(S.user.email)})` : ''}</button>
     </section>
     <div class="foot">Team SN Home Budget System</div>
@@ -875,6 +887,14 @@ document.addEventListener('click', async e => {
     case 'discard': S.draft = null; S.keepScroll = true; render(); break;
     case 'savesettings': await saveSettings(); S.keepScroll = true; render(); break;
     case 'export': exportCsv(); break;
+    case 'clearall': {
+      if (!S.tx.length) { toast('There are no entries to clear'); return; }
+      const word = prompt(`This deletes all ${S.tx.length} entries for both of you and cannot be undone. Your settings (salaries, bills, limits, goals) stay.\n\nType DELETE to confirm.`);
+      if ((word || '').trim().toUpperCase() !== 'DELETE') { toast('Nothing was deleted'); return; }
+      try { const n = await S.be.clearTx(); toast(`${n} entries cleared. Fresh start!`); }
+      catch (err) { console.error(err); toast('Could not clear. Check your connection.'); }
+      break;
+    }
   }
 });
 
