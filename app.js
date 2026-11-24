@@ -1,4 +1,5 @@
 import { FIREBASE_CONFIG } from './firebase-config.js';
+import { THEMES, THEME_ORDER, DEFAULT_THEME, applyTheme, motif, bambooEdges } from './themes.js';
 
 /* =========================================================
    Team SN Home Budget System
@@ -13,7 +14,6 @@ const MONTHS = ['January','February','March','April','May','June','July','August
 const MON = MONTHS.map(m => m.slice(0, 3));
 const PEOPLE = ['Bokx', 'Missy', 'Joint'];
 const AVATAR = { bokx: 'img/bokx.png', missy: 'img/missy.png', girl: 'img/girl.png', sky: 'img/sky.png' };
-const PIE = ['#9C8BE0', '#7FC3A0', '#7FA8DD', '#F2A7C3', '#F3C77A', '#76C6C4', '#C3A6EE', '#A8CDEB', '#E9B79A', '#B5D98C'];
 
 const PHONE_BILLS = [
   { id: 'bill_du_missy', name: "Missy's du", amount: 15000, freq: 'monthly', month: 1, icon: '📱', group: 'Phone & Internet' },
@@ -26,7 +26,35 @@ const PET_TYPES = [
   { name: 'Medical', icon: '💊' },
   { name: 'Grooming', icon: '✂️' },
 ];
-const GROUP_ICON = { 'Utilities': '💡', 'Phone & Internet': '📶', 'Pets': '🐾' };
+const GROUP_ICON = { 'TAQA': '⚡', 'Utilities': '💡', 'Phone & Internet': '📶', 'Pets': '🐾', 'Raye': 'girl', 'Family & Giving': '🤲', 'Allowances': '👛' };
+
+// The family's agreed monthly budget (Nov 2026). Amounts are in fils.
+const BUDGET_BILLS = [
+  { id: 'bill_rent', name: 'Rent', amount: 500000, freq: 'monthly', month: 1, icon: '🏠' },
+  { id: 'bill_elec', name: 'Electricity', amount: 60000, freq: 'monthly', month: 1, icon: '💡', group: 'TAQA' },
+  { id: 'bill_water', name: 'Water', amount: 15000, freq: 'monthly', month: 1, icon: '💧', group: 'TAQA' },
+  { id: 'bill_muni', name: 'Municipality Fee', amount: 25000, freq: 'monthly', month: 1, icon: '🏛️', group: 'TAQA' },
+  { id: 'bill_eand', name: 'e& Home Wireless', amount: 23000, freq: 'monthly', month: 1, icon: '📡' },
+  { id: 'bill_sunlife', name: 'Sunlife Insurance', amount: 110000, freq: 'monthly', month: 1, icon: '🛡️' },
+  { id: 'bill_raye_school', name: "Raye's School Fee", amount: 100000, freq: 'monthly', month: 1, icon: '🎒', group: 'Raye' },
+  { id: 'bill_raye_piano', name: "Raye's Piano Lesson", amount: 70000, freq: 'monthly', month: 1, icon: '🎹', group: 'Raye' },
+  { id: 'bill_raye_taxi', name: 'School Taxi Allowance', amount: 30000, freq: 'monthly', month: 1, icon: '🚕', group: 'Raye' },
+  { id: 'bill_church', name: 'Church Giving', amount: 50000, freq: 'monthly', month: 1, icon: '⛪', group: 'Family & Giving' },
+  { id: 'bill_sss', name: 'SSS (Social Security)', amount: 50000, freq: 'monthly', month: 1, icon: '🪪', group: 'Family & Giving' },
+  { id: 'bill_remit', name: 'Family Remittance', amount: 50000, freq: 'monthly', month: 1, icon: '💸', group: 'Family & Giving' },
+  { id: 'bill_allow_missy', name: 'Missy Allowance', amount: 60000, freq: 'monthly', month: 1, icon: 'missy', group: 'Allowances' },
+  { id: 'bill_allow_bokx', name: 'Bokx Allowance', amount: 60000, freq: 'monthly', month: 1, icon: 'bokx', group: 'Allowances' },
+];
+const BUDGET_CATS = [
+  { id: 'cat_groc', name: 'Groceries', limit: 200000, icon: '🛒' },
+  { id: 'cat_pets', name: 'Pets', limit: 30000, icon: '🐾', pets: true },
+  { id: 'cat_health', name: "Family's Health", limit: 30000, icon: '🩺' },
+  { id: 'cat_lpg', name: 'LPG & Drinking Water', limit: 5000, icon: '🔥', period: 'year', subs: [
+    { name: 'Water coupon booklet', icon: '💧', price: 17500 },
+    { name: 'LPG tank', icon: '🔥', price: 6500 },
+  ] },
+  { id: 'cat_misc', name: 'Miscellaneous', limit: 50000, icon: '📦' },
+];
 
 const DEFAULT_SETTINGS = {
   year: 2027,
@@ -36,42 +64,23 @@ const DEFAULT_SETTINGS = {
     { id: 'inc_bonus', name: 'Bonus', amount: 0, icon: '🎉' },
     { id: 'inc_other', name: 'Other Income', amount: 0, icon: '💵' },
   ],
-  bills: [
-    { id: 'bill_rent', name: 'Rent', amount: 500000, freq: 'monthly', month: 1, icon: '🏠' },
-    { id: 'bill_school', name: 'School Fees', amount: 800000, freq: 'split', month: 9, icon: '🎒' },
-    { id: 'bill_elec', name: 'Electricity', amount: 25000, freq: 'monthly', month: 1, icon: '💡', group: 'Utilities' },
-    { id: 'bill_water', name: 'Water', amount: 10000, freq: 'monthly', month: 1, icon: '💧', group: 'Utilities' },
-    { id: 'bill_muni', name: 'Municipality Fee', amount: 15000, freq: 'monthly', month: 1, icon: '🏛️', group: 'Utilities' },
-    ...PHONE_BILLS,
-    { id: 'bill_ins', name: 'Insurance', amount: 200000, freq: 'yearly', month: 1, icon: '🛡️' },
-    { id: 'bill_church', name: 'Church Giving', amount: 20000, freq: 'monthly', month: 1, icon: '⛪' },
-  ],
+  bills: BUDGET_BILLS,
   pets: [{ id: 'pet_sky', name: 'Sky', icon: 'sky' }],
   petTypes: PET_TYPES,
-  categories: [
-    { id: 'cat_groc', name: 'Groceries', limit: 150000, icon: '🛒' },
-    { id: 'cat_dine', name: 'Dining Out', limit: 60000, icon: '🍽️' },
-    { id: 'cat_shop', name: 'Shopping', limit: 50000, icon: '🛍️' },
-    { id: 'cat_kids', name: "Kids' Activities", limit: 30000, icon: 'girl' },
-    { id: 'cat_petrol', name: 'Petrol', limit: 40000, icon: '⛽' },
-    { id: 'cat_tools', name: 'Daddy Tools', limit: 20000, icon: '🔧' },
-    { id: 'cat_bike', name: 'Bicycle Parts', limit: 15000, icon: '🚲' },
-    { id: 'cat_pets', name: 'Pets', limit: 15000, icon: '🐾', pets: true },
-    { id: 'cat_misc', name: 'Miscellaneous', limit: 30000, icon: '📦' },
-  ],
+  categories: BUDGET_CATS,
   goals: [
-    { id: 'goal_emerg', name: 'Emergency Fund', target: 0, monthly: 20000, start: 0, icon: '🛟' },
+    { id: 'goal_emerg', name: 'Emergency Fund', target: 0, monthly: 200000, start: 0, icon: '🛟' },
     { id: 'goal_travel', name: 'Travel', target: 0, monthly: 0, start: 0, icon: '✈️' },
     { id: 'goal_school', name: 'School Savings', target: 0, monthly: 0, start: 0, icon: '🎓' },
   ],
   methods: ['Cash', 'Debit Card', 'Credit Card', 'Google Pay'],
-  migrated: ['util-split', 'groups-v1', 'pets-v2'],
+  migrated: ['util-split', 'groups-v1', 'pets-v2', 'budget-v3'],
 };
 
 // One-time updates to a budget that was already set up.
 function migrate(s) {
   const done = s.migrated || [];
-  if (['util-split', 'groups-v1', 'pets-v2'].every(k => done.includes(k))) return null;
+  if (['util-split', 'groups-v1', 'pets-v2', 'budget-v3'].every(k => done.includes(k))) return null;
   const out = clone(s);
   out.bills = out.bills || [];
   if (!done.includes('util-split')) {
@@ -105,7 +114,16 @@ function migrate(s) {
     if (!out.petTypes || !out.petTypes.length) out.petTypes = clone(PET_TYPES);
     if (!out.pets || !out.pets.length) out.pets = [{ id: 'pet_sky', name: 'Sky', icon: 'sky' }];
   }
-  out.migrated = [...new Set([...done, 'util-split', 'groups-v1', 'pets-v2'])];
+  if (!done.includes('budget-v3')) {
+    // New family budget: replace bills and spending categories, keep pets and their types.
+    out.bills = clone(BUDGET_BILLS);
+    out.categories = clone(BUDGET_CATS);
+    out.goals = out.goals || [];
+    const em = out.goals.find(g => g.id === 'goal_emerg');
+    if (em) em.monthly = 200000;
+    else out.goals.unshift({ id: 'goal_emerg', name: 'Emergency Fund', target: 0, monthly: 200000, start: 0, icon: '🛟' });
+  }
+  out.migrated = [...new Set([...done, 'util-split', 'groups-v1', 'pets-v2', 'budget-v3'])];
   return out;
 }
 
@@ -287,6 +305,18 @@ const S = {
   loginError: '',
 };
 
+S.theme = store.get('tsn-theme') || DEFAULT_THEME;
+if (!THEMES[S.theme]) S.theme = DEFAULT_THEME;
+let T = applyTheme(S.theme);
+function updateDeco() { const el = document.getElementById('bg-deco'); if (el) el.innerHTML = S.theme === 'take' ? bambooEdges() : ''; }
+updateDeco();
+function setTheme(k) {
+  if (!THEMES[k]) return;
+  S.theme = k; store.set('tsn-theme', k);
+  T = applyTheme(k); updateDeco();
+  S.keepScroll = true; render();
+}
+
 function setInitialMonth() {
   const d = new Date();
   const year = S.settings?.year || 2027;
@@ -369,8 +399,9 @@ function familyStrip() {
 function hero(title, withMonth) {
   const hi = S.me && S.me !== 'Joint' ? `Hi ${esc(S.me)} 👋` : 'Hi there 👋';
   return `<header class="hero">
+    <div class="motif">${motif(S.theme)}</div>
     <div class="hero-top">
-      <div><div class="hello">${hi}</div><div class="brand">${esc(title)}</div></div>
+      <div class="brand-wrap"><span class="hanko">家計簿</span><div><div class="hello">${hi}</div><div class="brand">${esc(title)}</div></div></div>
       ${familyStrip()}
     </div>
     ${withMonth === 'month' ? `<div class="month-switch">
@@ -397,9 +428,9 @@ function navView() {
 /* ---------------- login / who am I ---------------- */
 function loginView() {
   return `<div class="login">
-    <img class="sky" src="${AVATAR.sky}" alt="">
+    <img class="logo" src="img/logo.png" alt="Bokx and Missy">
     <h1>Team SN</h1>
-    <p>Home Budget System</p>
+    <div class="kakeibo">家計簿 · Home Budget System</div>
     <div class="family"><img src="${AVATAR.bokx}" alt=""><img src="${AVATAR.missy}" alt=""><img src="${AVATAR.girl}" alt=""></div>
     <button class="btn-google" data-act="signin">
       <svg viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 13 4 4 13 4 24s9 20 20 20 20-9 20-20c0-1.3-.1-2.6-.4-3.9z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2c-2 1.5-4.5 2.4-7.2 2.4-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.6-.4-3.9z"/></svg>
@@ -437,7 +468,7 @@ function whoAmIView() {
 /* ---------------- HOME (month) ---------------- */
 function ring(pct, color) {
   const r = 34, c = 2 * Math.PI * r, p = Math.max(0, Math.min(pct, 1));
-  return `<svg viewBox="0 0 80 80"><circle cx="40" cy="40" r="${r}" fill="none" stroke="#F0EDF7" stroke-width="9"/>
+  return `<svg viewBox="0 0 80 80"><circle cx="40" cy="40" r="${r}" fill="none" stroke="${T.track}" stroke-width="9"/>
     <circle cx="40" cy="40" r="${r}" fill="none" stroke="${color}" stroke-width="9" stroke-linecap="round" stroke-dasharray="${c * p} ${c}"/></svg>`;
 }
 function barClass(p) { return p > 1 ? 'over' : p >= 0.8 ? 'warn' : ''; }
@@ -445,7 +476,7 @@ function barClass(p) { return p > 1 ? 'over' : p >= 0.8 ? 'warn' : ''; }
 function homeView() {
   const st = monthStats(S.y, S.m);
   const pct = st.spendPlan ? st.spent / st.spendPlan : 0;
-  const ringColor = pct > 1 ? '#C2405A' : pct >= 0.8 ? '#E6B53C' : '#6B5CA5';
+  const ringColor = pct > 1 ? '#C2405A' : pct >= 0.8 ? '#E6B53C' : T.primary;
   const visibleBills = st.bills.filter(b => b.plan > 0 || b.paid > 0);
   const hiddenBills = st.bills.length - visibleBills.length;
   const unpaid = visibleBills.filter(b => b.status === 'due' || b.status === 'part').length;
@@ -468,7 +499,7 @@ function homeView() {
       </div>
     </section>
 
-    <div class="sec-title"><h2><span class="dot" style="background:var(--green)"></span>Income</h2><span class="meta num">${money(st.incomeGot)} of ${money(st.incomePlan)}</span></div>
+    <div class="sec-title"><h2><span class="dot" style="background:var(--green)"></span>Income <span class="jp">収入</span></h2><span class="meta num">${money(st.incomeGot)} of ${money(st.incomePlan)}</span></div>
     <section class="card">
       ${st.income.map(i => `<div class="row">
         ${icon(i.icon)}
@@ -480,29 +511,18 @@ function homeView() {
       </div>`).join('')}
     </section>
 
-    <div class="sec-title"><h2><span class="dot" style="background:var(--purple)"></span>Bills</h2><span class="meta">${unpaid ? `${unpaid} to pay` : visibleBills.length ? 'All paid 🎉' : ''}</span></div>
+    <div class="sec-title"><h2><span class="dot" style="background:var(--purple)"></span>Bills <span class="jp">固定費</span></h2><span class="meta">${unpaid ? `${unpaid} to pay` : visibleBills.length ? 'All paid 🎉' : ''}</span></div>
     <section class="card">
       ${billGroups(visibleBills).map(g => g.single ? billRow(g.single) : billGroupRow(g)).join('') || '<div class="empty">No bills this month.</div>'}
       ${hiddenBills ? `<div class="detail" style="font-size:12.5px;color:var(--muted);font-weight:700;padding-top:8px">${hiddenBills} yearly bill${hiddenBills > 1 ? 's' : ''} not due this month. <button data-act="add" data-kind="bill" style="color:var(--purple);font-weight:900">Log a payment</button></div>` : ''}
     </section>
 
-    <div class="sec-title"><h2><span class="dot" style="background:var(--blue)"></span>Everyday spending</h2><span class="meta num">${money(st.expenses)} of ${money(sum(st.cats, c => c.limit))}</span></div>
+    <div class="sec-title"><h2><span class="dot" style="background:var(--blue)"></span>Everyday spending <span class="jp">生活費</span></h2><span class="meta num">${money(st.expenses)} of ${money(sum(st.cats, c => c.limit))}</span></div>
     <section class="card">
-      ${st.cats.map(c => {
-        const p = c.limit ? c.spent / c.limit : (c.spent ? 2 : 0);
-        if (c.pets) return petCatRow(c, p, st.list);
-        return `<div class="row" data-act="add" data-kind="expense" data-ref="${c.id}" style="cursor:pointer">
-          ${icon(c.icon)}
-          <div class="main">
-            <div class="name">${esc(c.name)}</div>
-            <div class="bar ${barClass(p)}"><i style="width:${Math.min(p, 1) * 100}%"></i></div>
-            <div class="cat-line num"><span>${money(c.spent)} spent</span><span class="${c.limit - c.spent < 0 ? 'over' : ''}">${c.limit - c.spent < 0 ? `${money(c.spent - c.limit)} over` : `${money(c.limit - c.spent)} left`}</span></div>
-          </div>
-        </div>`;
-      }).join('')}
+      ${st.cats.map(c => catRow(c, st.list)).join('')}
     </section>
 
-    <div class="sec-title"><h2><span class="dot" style="background:var(--teal)"></span>Savings</h2><span class="meta num">${money(st.saved)} this month</span></div>
+    <div class="sec-title"><h2><span class="dot" style="background:var(--teal)"></span>Savings <span class="jp">貯金</span></h2><span class="meta num">${money(st.saved)} this month</span></div>
     <section class="card">
       ${st.goals.map(g => {
         const total = g.start + sum(S.tx.filter(t => t.kind === 'saving' && t.ref === g.id), t => t.amount);
@@ -519,7 +539,7 @@ function homeView() {
       }).join('')}
     </section>
 
-    <div class="sec-title"><h2><span class="dot" style="background:var(--purple-m)"></span>Who spent</h2></div>
+    <div class="sec-title"><h2><span class="dot" style="background:var(--purple-m)"></span>Who spent <span class="jp">誰が</span></h2></div>
     <section class="card">
       <div class="who-grid">
         ${st.who.map(w => `<div class="who"><div class="av ${w.p === 'Joint' ? 'joint' : ''}">${w.p === 'Joint' ? '2' : personAv(w.p)}</div><b>${w.p}</b><span class="num">${money(w.v)}</span></div>`).join('')}
@@ -556,29 +576,38 @@ function billGroupRow(g) {
 }
 
 function petIcon(petId) { return petId ? 'pet:' + petId : '🐾'; }
-function petCatRow(c, p, list) {
-  const key = 'cat:' + c.id, open = openGroups.has(key);
+function catRow(c, list) {
   const st = S.settings;
+  const yearly = c.period === 'year';
+  const subs = c.pets ? (st.petTypes || []) : (c.subs || []);
+  const expandable = c.pets || subs.length > 0;
   const items = list.filter(t => t.kind === 'expense' && t.ref === c.id);
-  const types = (st.petTypes || []).map(pt => ({ ...pt, v: sum(items.filter(t => t.sub === pt.name), t => t.amount) }));
-  const other = sum(items.filter(t => !(st.petTypes || []).some(pt => pt.name === t.sub)), t => t.amount);
-  const pets = st.pets || [];
-  const perPet = pets.map(pt => ({ ...pt, v: sum(items.filter(t => t.pet === pt.id), t => t.amount) }));
-  return `<div class="row grp" data-act="toggle" data-g="${esc(key)}" role="button" aria-expanded="${open}">
-    ${icon(pets.length === 1 ? petIcon(pets[0].id) : c.icon)}
+  let spent = c.spent, limit = c.limit;
+  if (yearly) {
+    spent = sum(txOfYear(S.y).filter(t => t.kind === 'expense' && t.ref === c.id), t => t.amount);
+    limit = c.limit * 12;
+  }
+  const p = limit ? spent / limit : (spent ? 2 : 0);
+  const key = 'cat:' + c.id, open = expandable && openGroups.has(key);
+  const pets = c.pets ? (st.pets || []) : [];
+  const head = `${icon(pets.length === 1 ? petIcon(pets[0].id) : c.icon)}
     <div class="main">
-      <div class="name">${esc(c.name)}${pets.length ? ` <span class="name-sub">${esc(pets.map(x => x.name).join(', '))}</span>` : ''}</div>
+      <div class="name">${esc(c.name)}${pets.length ? ` <span class="name-sub">${esc(pets.map(x => x.name).join(', '))}</span>` : ''}${yearly ? '<span class="year-note">yearly</span>' : ''}</div>
       <div class="bar ${barClass(p)}"><i style="width:${Math.min(p, 1) * 100}%"></i></div>
-      <div class="cat-line num"><span>${money(c.spent)} spent</span><span class="${c.limit - c.spent < 0 ? 'over' : ''}">${c.limit - c.spent < 0 ? `${money(c.spent - c.limit)} over` : `${money(c.limit - c.spent)} left`}</span></div>
-    </div>${chev(open)}
-  </div>
+      <div class="cat-line num"><span>${yearly ? `${money(spent)} this year` : `${money(spent)} spent`}</span><span class="${limit - spent < 0 ? 'over' : ''}">${limit - spent < 0 ? `${money(spent - limit)} over` : `${money(limit - spent)} left`}</span></div>
+    </div>`;
+  if (!expandable) return `<div class="row" data-act="add" data-kind="expense" data-ref="${c.id}" style="cursor:pointer">${head}</div>`;
+  const types = subs.map(pt => ({ ...pt, v: sum(items.filter(t => t.sub === pt.name), t => t.amount) }));
+  const other = sum(items.filter(t => !subs.some(pt => pt.name === t.sub)), t => t.amount);
+  const perPet = pets.map(pt => ({ ...pt, v: sum(items.filter(t => t.pet === pt.id), t => t.amount) }));
+  return `<div class="row grp" data-act="toggle" data-g="${esc(key)}" role="button" aria-expanded="${open}">${head}${chev(open)}</div>
   ${open ? `<div class="grp-items">
     ${types.map(t => `<div class="row sub-row" data-act="add" data-kind="expense" data-ref="${c.id}" data-sub="${esc(t.name)}" style="cursor:pointer">
-      ${icon(t.icon)}<div class="main"><div class="name">${esc(t.name)}</div></div>
-      <div class="amt num">${money(t.v)}</div></div>`).join('')}
+      ${icon(t.icon)}<div class="main"><div class="name">${esc(t.name)}</div>${t.price ? `<div class="detail num">${money(t.price)} each</div>` : ''}</div>
+      <div class="amt num">${money(t.v)}<small>this month</small></div></div>`).join('')}
     ${other ? `<div class="row sub-row">${icon('•')}<div class="main"><div class="name">Other</div></div><div class="amt num">${money(other)}</div></div>` : ''}
     ${pets.length > 1 ? `<div class="pet-split">${perPet.map(x => `<span>${smallIcon(petIcon(x.id))}${esc(x.name)} <b class="num">${money(x.v)}</b></span>`).join('')}</div>` : ''}
-    <button class="act soft pet-add" data-act="add" data-kind="expense" data-ref="${c.id}">+ Add pet expense</button>
+    <button class="act soft pet-add" data-act="add" data-kind="expense" data-ref="${c.id}">+ Add ${c.pets ? 'pet expense' : 'entry'}</button>
   </div>` : ''}`;
 }
 
@@ -593,18 +622,18 @@ function barChart(months) {
   let g = '';
   for (let i = 0; i <= 4; i++) {
     const v = top * i / 4;
-    g += `<line x1="${pl}" x2="${W}" y1="${y(v)}" y2="${y(v)}" stroke="#EFECF6"/><text x="${pl - 5}" y="${y(v) + 3}" text-anchor="end" font-size="9" fill="#8C86A3" font-weight="700">${short(v)}</text>`;
+    g += `<line x1="${pl}" x2="${W}" y1="${y(v)}" y2="${y(v)}" stroke="${T.line}"/><text x="${pl - 5}" y="${y(v) + 3}" text-anchor="end" font-size="9" fill="${T.muted}" font-weight="700">${short(v)}</text>`;
   }
   months.forEach((x, i) => {
     const cx = pl + cw * i + cw / 2;
     const ih = y(0) - y(x.inc), oh = y(0) - y(x.out), sh = y(0) - y(x.sav);
-    g += `<rect x="${cx - bw - 1}" y="${y(x.inc)}" width="${bw}" height="${Math.max(ih, 0)}" rx="3" fill="#7FC3A0"/>`;
-    g += `<rect x="${cx + 1}" y="${y(x.out)}" width="${bw}" height="${Math.max(oh, 0)}" rx="3" fill="#9C8BE0"/>`;
-    g += `<rect x="${cx + 1}" y="${y(x.out) - sh}" width="${bw}" height="${Math.max(sh, 0)}" rx="3" fill="#76C6C4"/>`;
-    g += `<text x="${cx}" y="${H - 6}" text-anchor="middle" font-size="9.5" fill="${i + 1 === S.m ? '#6B5CA5' : '#8C86A3'}" font-weight="800">${MON[i][0]}</text>`;
+    g += `<rect x="${cx - bw - 1}" y="${y(x.inc)}" width="${bw}" height="${Math.max(ih, 0)}" rx="3" fill="${T.income}"/>`;
+    g += `<rect x="${cx + 1}" y="${y(x.out)}" width="${bw}" height="${Math.max(oh, 0)}" rx="3" fill="${T.spend}"/>`;
+    g += `<rect x="${cx + 1}" y="${y(x.out) - sh}" width="${bw}" height="${Math.max(sh, 0)}" rx="3" fill="${T.save}" opacity=".75"/>`;
+    g += `<text x="${cx}" y="${H - 6}" text-anchor="middle" font-size="9.5" fill="${i + 1 === S.m ? T.primary : T.muted}" font-weight="800">${MON[i][0]}</text>`;
   });
   return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Income and spending by month">${g}</svg>
-    <div class="legend"><span><i style="background:#7FC3A0"></i>Income</span><span><i style="background:#9C8BE0"></i>Spent</span><span><i style="background:#76C6C4"></i>Saved</span></div>`;
+    <div class="legend"><span><i style="background:${T.income}"></i>Income</span><span><i style="background:${T.spend}"></i>Spent</span><span><i style="background:${T.save};opacity:.75"></i>Saved</span></div>`;
 }
 
 function donut(items) {
@@ -615,12 +644,12 @@ function donut(items) {
   items.forEach((x, i) => {
     if (!x.v) return;
     const len = c * x.v / total;
-    arcs += `<circle cx="70" cy="70" r="${r}" fill="none" stroke="${PIE[i % PIE.length]}" stroke-width="22" stroke-dasharray="${len} ${c - len}" stroke-dashoffset="${-off}" transform="rotate(-90 70 70)"/>`;
+    arcs += `<circle cx="70" cy="70" r="${r}" fill="none" stroke="${T.pie[i % T.pie.length]}" stroke-width="22" stroke-dasharray="${len} ${c - len}" stroke-dashoffset="${-off}" transform="rotate(-90 70 70)"/>`;
     off += len;
   });
   return `<div class="donut-wrap">
-    <svg viewBox="0 0 140 140">${arcs}<text x="70" y="66" text-anchor="middle" font-size="10" fill="#8C86A3" font-weight="800">TOTAL</text><text x="70" y="82" text-anchor="middle" font-size="14" fill="#2F2A45" font-weight="900">${short(total)}</text></svg>
-    <div class="donut-legend">${items.map((x, i) => x.v ? `<div><i style="background:${PIE[i % PIE.length]}"></i><span>${esc(x.name)}</span><b class="num">${Math.round(x.v / total * 100)}%</b></div>` : '').join('')}</div>
+    <svg viewBox="0 0 140 140">${arcs}<text x="70" y="66" text-anchor="middle" font-size="10" fill="${T.muted}" font-weight="800">TOTAL</text><text x="70" y="82" text-anchor="middle" font-size="14" fill="${T.ink}" font-weight="900">${short(total)}</text></svg>
+    <div class="donut-legend">${items.map((x, i) => x.v ? `<div><i style="background:${T.pie[i % T.pie.length]}"></i><span>${esc(x.name)}</span><b class="num">${Math.round(x.v / total * 100)}%</b></div>` : '').join('')}</div>
   </div>`;
 }
 
@@ -646,7 +675,7 @@ function yearView() {
           <div class="big num ${inc - out - sav < 0 ? 'neg' : ''}">${money(inc - out - sav)}</div>
           <div class="sub">Saving ${Math.round(rate * 100)}% of income · spent ${plan ? Math.round(out / plan * 100) : 0}% of the yearly plan</div>
         </div>
-        <div class="ring">${ring(rate / 0.2, '#3C8C8C')}<div class="c"><b>${Math.round(rate * 100)}%</b><span>saved</span></div></div>
+        <div class="ring">${ring(rate / 0.2, T.save)}<div class="c"><b>${Math.round(rate * 100)}%</b><span>saved</span></div></div>
       </div>
       <div class="kpis">
         <div class="kpi in"><div class="k">Income</div><div class="v num">${short(inc)}</div></div>
@@ -655,13 +684,13 @@ function yearView() {
       </div>
     </section>
 
-    <div class="sec-title"><h2>Month by month</h2><span class="meta">AED</span></div>
+    <div class="sec-title"><h2>Month by month <span class="jp">月別</span></h2><span class="meta">AED</span></div>
     <section class="card">${barChart(months)}</section>
 
-    <div class="sec-title"><h2>Where the money went</h2></div>
+    <div class="sec-title"><h2>Where the money went <span class="jp">内訳</span></h2></div>
     <section class="card">${donut(cats)}</section>
 
-    <div class="sec-title"><h2><span class="dot" style="background:var(--blue)"></span>Spending limits for the year</h2></div>
+    <div class="sec-title"><h2><span class="dot" style="background:var(--blue)"></span>Spending limits for the year <span class="jp">予算</span></h2></div>
     <section class="card">
       ${cats.map(c => {
         const p = c.lim ? c.v / c.lim : (c.v ? 2 : 0);
@@ -671,7 +700,7 @@ function yearView() {
       }).join('')}
     </section>
 
-    <div class="sec-title"><h2><span class="dot" style="background:var(--purple)"></span>Bills paid this year</h2></div>
+    <div class="sec-title"><h2><span class="dot" style="background:var(--purple)"></span>Bills paid this year <span class="jp">年間</span></h2></div>
     <section class="card">
       ${billGroups(bills).map(g => {
         const one = (b, cls = '') => {
@@ -691,7 +720,7 @@ function yearView() {
       }).join('')}
     </section>
 
-    <div class="sec-title"><h2>Who spent</h2></div>
+    <div class="sec-title"><h2>Who spent <span class="jp">誰が</span></h2></div>
     <section class="card"><div class="who-grid">
       ${who.map(w => `<div class="who"><div class="av ${w.name === 'Joint' ? 'joint' : ''}">${w.name === 'Joint' ? '2' : personAv(w.name)}</div><b>${w.name}</b><span class="num">${money(w.v)}</span></div>`).join('')}
     </div></section>
@@ -708,7 +737,12 @@ function refInfo(t) {
     const petName = pet?.name || t.petName || '';
     return { name: [petName, t.sub].filter(Boolean).join(' · ') || item?.name || 'Pets', icon: pet ? petIcon(pet.id) : '🐾' };
   }
-  return { name: item?.name || t.refName || 'Removed item', icon: item?.icon || t.refIcon || '•' };
+  const base = item?.name || t.refName || 'Removed item';
+  if (t.kind === 'expense' && t.sub) {
+    const sb = (item?.subs || []).find(x => x.name === t.sub);
+    return { name: `${base} · ${t.sub}`, icon: sb?.icon || item?.icon || t.refIcon || '•' };
+  }
+  return { name: base, icon: item?.icon || t.refIcon || '•' };
 }
 
 function historyView() {
@@ -769,10 +803,13 @@ function openSheet(opts = {}) {
     if (!sheet.ref) sheet.ref = poolFor(kind)[0]?.id || null;
     if (kind === 'income') { const inc = st.income.find(i => i.id === sheet.ref); if (inc?.icon === 'missy') sheet.who = 'Missy'; if (inc?.icon === 'bokx') sheet.who = 'Bokx'; }
     sheet.sub = opts.sub || null;
+    const qs = catSubs(sheet.ref).find(x => x.name === sheet.sub);
+    if (kind === 'expense' && qs?.price) sheet.amount = filsToInput(qs.price);
   }
   fillPetDefaults();
   renderSheet(true);
 }
+function catSubs(ref) { const c = S.settings.categories.find(x => x.id === ref); return c && !c.pets ? (c.subs || []) : []; }
 function isPetCat(ref) { return !!S.settings.categories.find(c => c.id === ref)?.pets; }
 function fillPetDefaults() {
   if (!sheet || sheet.kind !== 'expense' || !isPetCat(sheet.ref)) return;
@@ -810,7 +847,9 @@ function renderSheet(focus) {
       ${(st.pets || []).length > 1 ? `<div class="field-label">Which pet</div>
       <div class="pick">${st.pets.map(pt => `<button data-act="pet" data-id="${pt.id}" class="${sheet.pet === pt.id ? 'on' : ''}">${smallIcon(petIcon(pt.id))}${esc(pt.name)}</button>`).join('')}</div>` : ''}
       <div class="field-label">${(st.pets || []).length === 1 ? `For ${esc(st.pets[0].name)}` : 'Type'}</div>
-      <div class="pick">${(st.petTypes || []).map(pt => `<button data-act="sub" data-n="${esc(pt.name)}" class="${sheet.sub === pt.name ? 'on' : ''}">${smallIcon(pt.icon)}${esc(pt.name)}</button>`).join('')}</div>` : ''}
+      <div class="pick">${(st.petTypes || []).map(pt => `<button data-act="sub" data-n="${esc(pt.name)}" class="${sheet.sub === pt.name ? 'on' : ''}">${smallIcon(pt.icon)}${esc(pt.name)}</button>`).join('')}</div>`
+    : sheet.kind === 'expense' && catSubs(sheet.ref).length ? `<div class="field-label">What did you buy?</div>
+      <div class="pick">${catSubs(sheet.ref).map(sb => `<button data-act="sub" data-n="${esc(sb.name)}" class="${sheet.sub === sb.name ? 'on' : ''}">${smallIcon(sb.icon)}${esc(sb.name)}${sb.price ? ` <span class="price num">${money(sb.price, { noCur: true })}</span>` : ''}</button>`).join('')}</div>` : ''}
     <div class="field-label">${sheet.kind === 'income' ? 'Received by' : sheet.kind === 'saving' ? 'Saved by' : 'Spent by'}</div>
     <div class="pick">${PEOPLE.map(p => `<button data-act="who" data-p="${p}" class="${sheet.who === p ? 'on' : ''}">${personAv(p) || '👫'}${p}</button>`).join('')}</div>
     ${showMethod ? `<div class="field-label">Paid with</div>
@@ -848,7 +887,7 @@ async function saveSheet() {
   if (sheet.kind === 'expense' && isPetCat(sheet.ref)) {
     const pet = (S.settings.pets || []).find(x => x.id === sheet.pet);
     t.pet = sheet.pet || ''; t.petName = pet?.name || ''; t.sub = sheet.sub || '';
-  } else { t.pet = ''; t.petName = ''; t.sub = ''; }
+  } else { t.pet = ''; t.petName = ''; t.sub = sheet.kind === 'expense' && catSubs(sheet.ref).some(x => x.name === sheet.sub) ? sheet.sub : ''; }
   if (showMethod) store.set('tsn-method', sheet.method);
   const id = sheet.id;
   closeSheet();
@@ -889,6 +928,16 @@ function textInput(path, val, ph = '', cls = '') {
   return `<input class="inp ${cls}" data-set="${path}" value="${esc(val)}" placeholder="${esc(ph)}">`;
 }
 
+function themeCard(k) {
+  const t = THEMES[k];
+  return `<button class="theme-card ${S.theme === k ? 'on' : ''} ${k === 'take' ? 'special' : ''}" data-act="theme" data-k="${k}" aria-pressed="${S.theme === k}">
+    <div class="sw" style="background:linear-gradient(140deg, ${t.hero[0]}, ${t.hero[1]} 55%, ${t.hero[2]})">${motif(k)}<span class="k">${t.jp}</span>
+      <span class="dots">${[t.primary, t.income, t.spend, t.save, t.accent].map(c => `<i style="background:${c}"></i>`).join('')}</span></div>
+    <div class="tx"><b>${t.name}</b><span>${t.note}</span></div>
+    ${S.theme === k ? '<span class="tick">✓</span>' : ''}
+  </button>`;
+}
+
 function settingsView() {
   const d = S.draft || S.settings;
   const monthSel = (path, val) => `<select class="inp" data-set="${path}" data-type="int">${MON.map((m, i) => `<option value="${i + 1}" ${Number(val) === i + 1 ? 'selected' : ''}>${m}</option>`).join('')}</select>`;
@@ -905,7 +954,10 @@ function settingsView() {
       <input class="inp num" inputmode="numeric" data-set="year" data-type="int" value="${esc(d.year)}" style="max-width:120px">
     </section>
 
-    <div class="sec-title"><h2><span class="dot" style="background:var(--green)"></span>Income (monthly)</h2></div>
+    <div class="sec-title"><h2><span class="dot" style="background:var(--accent)"></span>Theme <span class="jp">色</span></h2><span class="meta">This phone only</span></div>
+    <section class="card"><div class="theme-grid">${THEME_ORDER.map(themeCard).join('')}</div></section>
+
+    <div class="sec-title"><h2><span class="dot" style="background:var(--green)"></span>Income (monthly) <span class="jp">収入</span></h2></div>
     <section class="card">
       ${d.income.map((x, i) => `<div class="set-row">
         <div class="line">${textInput(`income.${i}.icon`, x.icon, '', 'icon-inp')}${textInput(`income.${i}.name`, x.name, 'Name')}<button class="x-btn" data-act="rm" data-list="income" data-i="${i}" aria-label="Remove">×</button></div>
@@ -914,7 +966,7 @@ function settingsView() {
       <button class="add-row" data-act="addrow" data-list="income">+ Add income</button>
     </section>
 
-    <div class="sec-title"><h2><span class="dot" style="background:#E9A0BD"></span>Pets</h2></div>
+    <div class="sec-title"><h2><span class="dot" style="background:var(--accent)"></span>Pets <span class="jp">ペット</span></h2></div>
     <section class="card">
       ${(d.pets || []).map((x, i) => `<div class="set-row">
         <div class="line">
@@ -932,7 +984,7 @@ function settingsView() {
       <button class="add-row" data-act="addrow" data-list="petTypes">+ Add type</button>
     </section>
 
-    <div class="sec-title"><h2><span class="dot" style="background:var(--purple)"></span>Fixed bills</h2></div>
+    <div class="sec-title"><h2><span class="dot" style="background:var(--purple)"></span>Fixed bills <span class="jp">固定費</span></h2></div>
     <section class="card">
       <datalist id="grp-list">${[...new Set(d.bills.map(b => (b.group || '').trim()).filter(Boolean))].map(g => `<option value="${esc(g)}">`).join('')}</datalist>
       ${d.bills.map((x, i) => `<div class="set-row">
@@ -944,16 +996,19 @@ function settingsView() {
       <button class="add-row" data-act="addrow" data-list="bills">+ Add bill</button>
     </section>
 
-    <div class="sec-title"><h2><span class="dot" style="background:var(--blue)"></span>Everyday spending limits</h2></div>
+    <div class="sec-title"><h2><span class="dot" style="background:var(--blue)"></span>Everyday spending limits <span class="jp">生活費</span></h2></div>
     <section class="card">
       ${d.categories.map((x, i) => `<div class="set-row">
         <div class="line">${textInput(`categories.${i}.icon`, x.icon, '', 'icon-inp')}${textInput(`categories.${i}.name`, x.name, 'Name')}<button class="x-btn" data-act="rm" data-list="categories" data-i="${i}" aria-label="Remove">×</button></div>
-        <div class="line">${moneyInput(`categories.${i}.limit`, x.limit)}</div>
+        <div class="line">${moneyInput(`categories.${i}.limit`, x.limit)}<span class="mini" style="margin:0;flex:none">a month</span></div>
+        <label class="check"><input type="checkbox" data-set="categories.${i}.period" data-type="yearcheck" ${x.period === 'year' ? 'checked' : ''}> Track over the whole year (for things bought every few months)</label>
+        ${x.pets ? '' : `${(x.subs || []).length ? `<div class="subs-edit"><div class="mini">Quick items (fill the amount when picked)</div>${x.subs.map((sb, j) => `<div class="line">${textInput(`categories.${i}.subs.${j}.icon`, sb.icon, '', 'icon-inp')}${textInput(`categories.${i}.subs.${j}.name`, sb.name, 'Item')}${moneyInput(`categories.${i}.subs.${j}.price`, sb.price)}<button class="x-btn" data-act="rmsub" data-i="${i}" data-j="${j}" aria-label="Remove">×</button></div>`).join('')}</div>` : ''}
+        <button class="mini-add" data-act="addsub" data-i="${i}">+ Quick item</button>`}
       </div>`).join('')}
       <button class="add-row" data-act="addrow" data-list="categories">+ Add category</button>
     </section>
 
-    <div class="sec-title"><h2><span class="dot" style="background:var(--teal)"></span>Savings goals</h2></div>
+    <div class="sec-title"><h2><span class="dot" style="background:var(--teal)"></span>Savings goals <span class="jp">貯金</span></h2></div>
     <section class="card">
       ${d.goals.map((x, i) => `<div class="set-row">
         <div class="line">${textInput(`goals.${i}.icon`, x.icon, '', 'icon-inp')}${textInput(`goals.${i}.name`, x.name, 'Name')}<button class="x-btn" data-act="rm" data-list="goals" data-i="${i}" aria-label="Remove">×</button></div>
@@ -963,13 +1018,13 @@ function settingsView() {
       <button class="add-row" data-act="addrow" data-list="goals">+ Add goal</button>
     </section>
 
-    <div class="sec-title"><h2>Payment methods</h2></div>
+    <div class="sec-title"><h2>Payment methods <span class="jp">支払い</span></h2></div>
     <section class="card">
       ${d.methods.map((x, i) => `<div class="set-row"><div class="line">${textInput(`methods.${i}`, x, 'Method')}<button class="x-btn" data-act="rm" data-list="methods" data-i="${i}" aria-label="Remove">×</button></div></div>`).join('')}
       <button class="add-row" data-act="addrow" data-list="methods">+ Add method</button>
     </section>
 
-    <div class="sec-title"><h2>More</h2></div>
+    <div class="sec-title"><h2>More <span class="jp">その他</span></h2></div>
     <section class="card">
       <div class="detail" style="font-size:13px;color:var(--muted);font-weight:700">Icons: use any emoji, or type bokx, missy, girl or sky for the family pictures.</div>
       <button class="link-btn" data-act="export">Download all entries (CSV for Excel)</button>
@@ -1008,6 +1063,10 @@ async function saveSettings() {
   d.pets = d.pets || [];
   ['income', 'bills', 'categories', 'goals', 'pets'].forEach(k => { d[k] = d[k].filter(x => x.name.trim()); d[k].forEach(x => { x.name = x.name.trim(); x.icon = (x.icon || '').trim() || '•'; }); });
   d.bills.forEach(b => { b.group = (b.group || '').trim(); });
+  d.categories.forEach(c => {
+    if (c.subs) c.subs = c.subs.filter(x => (x.name || '').trim()).map(x => ({ name: x.name.trim(), icon: (x.icon || '').trim() || '•', price: x.price || 0 }));
+    if (c.period !== 'year') delete c.period;
+  });
   d.petTypes = (d.petTypes || []).filter(x => x.name.trim()).map(x => ({ name: x.name.trim(), icon: (x.icon || '').trim() || '🐾' }));
   if (d.pets.length && !d.categories.some(c => c.pets)) {
     d.categories.push({ id: 'cat_pets', name: 'Pets', limit: 0, icon: '🐾', pets: true });
@@ -1075,13 +1134,28 @@ document.addEventListener('click', async e => {
       renderSheet(false);
       break;
     case 'ref':
-      readSheetInputs(); sheet.ref = el.dataset.id; fillPetDefaults();
+      readSheetInputs(); if (sheet.ref !== el.dataset.id) sheet.sub = null; sheet.ref = el.dataset.id; fillPetDefaults();
       if (sheet.kind === 'income') { const inc = S.settings.income.find(i => i.id === sheet.ref); if (inc?.icon === 'missy') sheet.who = 'Missy'; if (inc?.icon === 'bokx') sheet.who = 'Bokx'; }
       renderSheet(false);
       break;
     case 'who': readSheetInputs(); sheet.who = el.dataset.p; renderSheet(false); break;
     case 'pet': readSheetInputs(); sheet.pet = el.dataset.id; renderSheet(false); break;
-    case 'sub': readSheetInputs(); sheet.sub = el.dataset.n; renderSheet(false); break;
+    case 'sub': {
+      readSheetInputs();
+      const subs = catSubs(sheet.ref);
+      if (subs.length) {
+        const prev = subs.find(x => x.name === sheet.sub), next = subs.find(x => x.name === el.dataset.n);
+        const cur = toFils(sheet.amount);
+        if (sheet.sub === el.dataset.n) { sheet.sub = null; }
+        else {
+          sheet.sub = el.dataset.n;
+          // Fill in the usual price unless a different amount was typed.
+          if (next?.price && (!cur || (prev && cur === prev.price))) sheet.amount = filsToInput(next.price);
+        }
+      } else sheet.sub = el.dataset.n;
+      renderSheet(false);
+      break;
+    }
     case 'method': readSheetInputs(); sheet.method = el.dataset.m; renderSheet(false); break;
     case 'save': saveSheet(); break;
     case 'delete': {
@@ -1108,6 +1182,16 @@ document.addEventListener('click', async e => {
     case 'discard': S.draft = null; S.keepScroll = true; render(); break;
     case 'savesettings': await saveSettings(); S.keepScroll = true; render(); break;
     case 'export': exportCsv(); break;
+    case 'theme': setTheme(el.dataset.k); break;
+    case 'addsub': {
+      const d = ensureDraft(); const c = d.categories[Number(el.dataset.i)];
+      c.subs = c.subs || []; c.subs.push({ name: '', icon: '🏷️', price: 0 }); S.keepScroll = true; render();
+      break;
+    }
+    case 'rmsub': {
+      const d = ensureDraft(); d.categories[Number(el.dataset.i)].subs.splice(Number(el.dataset.j), 1); S.keepScroll = true; render();
+      break;
+    }
     case 'toggle': toggleGroup(el.dataset.g); S.keepScroll = true; render(); break;
     case 'petphoto': S.petIdx = Number(el.dataset.i); $('#petfile')?.click(); break;
     case 'petemoji': {
@@ -1141,6 +1225,7 @@ document.addEventListener('input', e => {
     let v = el.value;
     if (el.dataset.type === 'money') v = toFils(v);
     if (el.dataset.type === 'int') v = parseInt(v, 10) || 0;
+    if (el.dataset.type === 'yearcheck') v = el.checked ? 'year' : 'month';
     setPath(d, el.dataset.set, v);
     // Show or hide the save bar without redrawing the whole page while typing.
     const bar = $('.save-bar');

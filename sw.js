@@ -1,8 +1,8 @@
 // Keeps the app shell available offline. Data sync is handled by Firestore.
-const CACHE = 'team-sn-v6';
+const CACHE = 'team-sn-v7';
 const SHELL = [
   './', 'index.html', 'styles.css', 'app.js', 'firebase-config.js', 'manifest.webmanifest',
-  'img/bokx.png', 'img/missy.png', 'img/girl.png', 'img/sky.png', 'img/icon-192.png'
+  'img/bokx.png', 'img/missy.png', 'img/girl.png', 'img/sky.png', 'img/icon-192.png', 'img/logo.png', 'img/bg-tokyo.jpg', 'themes.js'
 ];
 
 self.addEventListener('install', e => {
