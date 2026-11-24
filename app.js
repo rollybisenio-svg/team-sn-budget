@@ -26,7 +26,7 @@ const PET_TYPES = [
   { name: 'Medical', icon: '💊' },
   { name: 'Grooming', icon: '✂️' },
 ];
-const GROUP_ICON = { 'TAQA': '⚡', 'Utilities': '💡', 'Phone & Internet': '📶', 'Pets': '🐾', 'Raye': 'girl', 'Family & Giving': '🤲', 'Allowances': '👛' };
+const GROUP_ICON = { 'Bokx': 'bokx', 'Missy': 'missy', 'TAQA': '⚡', 'Utilities': '💡', 'Phone & Internet': '📶', 'Pets': '🐾', 'Raye': 'girl', 'Family & Giving': '🤲', 'Allowances': '👛' };
 
 // The family's agreed monthly budget (Nov 2026). Amounts are in fils.
 const BUDGET_BILLS = [
@@ -56,14 +56,20 @@ const BUDGET_CATS = [
   { id: 'cat_misc', name: 'Miscellaneous', limit: 50000, icon: '📦' },
 ];
 
+// Each of us has Salary, Bonus, Air Ticket Allowance and Leave Credit Conversion.
+function personIncome(who, salary) {
+  const k = who.toLowerCase();
+  return [
+    { id: `inc_${k}`, name: `${who} Salary`, amount: salary, icon: k, group: who, who },
+    { id: `inc_${k}_bonus`, name: `${who} Bonus`, amount: 0, icon: '🎉', group: who, who },
+    { id: `inc_${k}_ticket`, name: `${who} Air Ticket Allowance`, amount: 0, icon: '✈️', group: who, who },
+    { id: `inc_${k}_leave`, name: `${who} Leave Credit Conversion`, amount: 0, icon: '🏖️', group: who, who },
+  ];
+}
+
 const DEFAULT_SETTINGS = {
   year: 2027,
-  income: [
-    { id: 'inc_bokx', name: 'Bokx Salary', amount: 700000, icon: 'bokx' },
-    { id: 'inc_missy', name: 'Missy Salary', amount: 1200000, icon: 'missy' },
-    { id: 'inc_bonus', name: 'Bonus', amount: 0, icon: '🎉' },
-    { id: 'inc_other', name: 'Other Income', amount: 0, icon: '💵' },
-  ],
+  income: [...personIncome('Bokx', 700000), ...personIncome('Missy', 1200000), { id: 'inc_other', name: 'Other Income', amount: 0, icon: '💵' }],
   bills: BUDGET_BILLS,
   pets: [{ id: 'pet_sky', name: 'Sky', icon: 'sky' }],
   petTypes: PET_TYPES,
@@ -74,13 +80,13 @@ const DEFAULT_SETTINGS = {
     { id: 'goal_school', name: 'School Savings', target: 0, monthly: 0, start: 0, icon: '🎓' },
   ],
   methods: ['Cash', 'Debit Card', 'Credit Card', 'Google Pay'],
-  migrated: ['util-split', 'groups-v1', 'pets-v2', 'budget-v3'],
+  migrated: ['util-split', 'groups-v1', 'pets-v2', 'budget-v3', 'income-v2'],
 };
 
 // One-time updates to a budget that was already set up.
 function migrate(s) {
   const done = s.migrated || [];
-  if (['util-split', 'groups-v1', 'pets-v2', 'budget-v3'].every(k => done.includes(k))) return null;
+  if (['util-split', 'groups-v1', 'pets-v2', 'budget-v3', 'income-v2'].every(k => done.includes(k))) return null;
   const out = clone(s);
   out.bills = out.bills || [];
   if (!done.includes('util-split')) {
@@ -123,7 +129,14 @@ function migrate(s) {
     if (em) em.monthly = 200000;
     else out.goals.unshift({ id: 'goal_emerg', name: 'Emergency Fund', target: 0, monthly: 200000, start: 0, icon: '🛟' });
   }
-  out.migrated = [...new Set([...done, 'util-split', 'groups-v1', 'pets-v2', 'budget-v3'])];
+  if (!done.includes('income-v2')) {
+    // Group income by person, keeping the salary amounts already set.
+    const old = out.income || [];
+    const sal = id => old.find(i => i.id === id)?.amount;
+    const others = old.filter(i => !['inc_bokx', 'inc_missy', 'inc_bonus'].includes(i.id) && !/^inc_(bokx|missy)_/.test(i.id));
+    out.income = [...personIncome('Bokx', sal('inc_bokx') ?? 700000), ...personIncome('Missy', sal('inc_missy') ?? 1200000), ...others];
+  }
+  out.migrated = [...new Set([...done, 'util-split', 'groups-v1', 'pets-v2', 'budget-v3', 'income-v2'])];
   return out;
 }
 
@@ -507,14 +520,7 @@ function homeView() {
 
     <div class="sec-title"><h2><span class="dot" style="background:var(--green)"></span>Income <span class="jp">収入</span></h2><span class="meta num">${money(st.incomeGot)} of ${money(st.incomePlan)}</span></div>
     <section class="card">
-      ${st.income.map(i => `<div class="row">
-        ${icon(i.icon)}
-        <div class="main"><div class="name">${esc(i.name)}</div><div class="detail num">Planned ${money(i.amount)}</div></div>
-        ${i.got > 0
-          ? `<div class="amt num" style="color:var(--green)">${money(i.got)}<small>received</small></div>`
-          : i.amount > 0 ? `<button class="act green" data-act="quick" data-kind="income" data-ref="${i.id}">Mark received</button>`
-          : `<button class="act soft" data-act="add" data-kind="income" data-ref="${i.id}">Add</button>`}
-      </div>`).join('')}
+      ${billGroups(st.income).map(g => g.single ? incomeRow(g.single) : incomeGroupRow(g)).join('')}
     </section>
 
     <div class="sec-title"><h2><span class="dot" style="background:var(--purple)"></span>Bills <span class="jp">固定費</span></h2><span class="meta">${unpaid ? `${unpaid} to pay` : visibleBills.length ? 'All paid 🎉' : ''}</span></div>
@@ -556,6 +562,34 @@ function homeView() {
   </main>`;
 }
 
+function incomeAction(i) {
+  return i.got > 0
+    ? `<div class="amt num" style="color:var(--green)">${money(i.got)}<small>received</small></div>`
+    : i.amount > 0 ? `<button class="act green" data-act="quick" data-kind="income" data-ref="${i.id}">Mark received</button>`
+    : `<button class="act soft" data-act="add" data-kind="income" data-ref="${i.id}">Add</button>`;
+}
+function incomeRow(i, sub = false, group = '') {
+  return `<div class="row ${sub ? 'sub-row' : ''}">
+    ${icon(i.icon)}
+    <div class="main"><div class="name">${esc(shortName(i.name, group))}</div><div class="detail num">${i.amount ? `Planned ${money(i.amount)}` : 'When received'}</div></div>
+    ${incomeAction(i)}
+  </div>`;
+}
+function incomeGroupRow(g) {
+  const key = 'inc:' + g.name, open = openGroups.has(key);
+  const plan = sum(g.items, i => i.amount), got = sum(g.items, i => i.got);
+  // The salary (the planned item) gets its button right on the group line.
+  const main = g.items.find(i => i.amount > 0);
+  const right = main && !main.got ? incomeAction(main)
+    : got > 0 ? `<div class="amt num" style="color:var(--green)">${money(got)}<small>received</small></div>` : '';
+  return `<div class="row grp" data-act="toggle" data-g="${esc(key)}" role="button" aria-expanded="${open}">
+    ${icon(groupIcon(g))}
+    <div class="main"><div class="name">${esc(g.name)}</div>
+      <div class="detail num">Planned ${money(plan)}</div></div>
+    ${right}${chev(open)}
+  </div>
+  ${open ? `<div class="grp-items">${g.items.map(i => incomeRow(i, true, g.name)).join('')}</div>` : ''}`;
+}
 function billRow(b, sub = false) {
   return `<div class="row ${sub ? 'sub-row' : ''}">
     ${icon(b.icon)}
@@ -807,7 +841,7 @@ function openSheet(opts = {}) {
     const kind = opts.kind || 'expense';
     sheet = { id: null, kind, ref: opts.ref || null, amount: '', who: S.me || 'Bokx', method: store.get('tsn-method') || st.methods[1] || st.methods[0], date: defaultDate(), note: '' };
     if (!sheet.ref) sheet.ref = poolFor(kind)[0]?.id || null;
-    if (kind === 'income') { const inc = st.income.find(i => i.id === sheet.ref); if (inc?.icon === 'missy') sheet.who = 'Missy'; if (inc?.icon === 'bokx') sheet.who = 'Bokx'; }
+    if (kind === 'income') { const w = incomeWho(st.income.find(i => i.id === sheet.ref)); if (w) sheet.who = w; }
     sheet.sub = opts.sub || null;
     const qs = catSubs(sheet.ref).find(x => x.name === sheet.sub);
     if (kind === 'expense' && qs?.price) sheet.amount = filsToInput(qs.price);
@@ -816,6 +850,15 @@ function openSheet(opts = {}) {
   renderSheet(true);
 }
 function catSubs(ref) { const c = S.settings.categories.find(x => x.id === ref); return c && !c.pets ? (c.subs || []) : []; }
+function incomeWho(inc) {
+  if (!inc) return null;
+  if (inc.who) return inc.who;
+  if (inc.icon === 'bokx' || inc.group === 'Bokx') return 'Bokx';
+  if (inc.icon === 'missy' || inc.group === 'Missy') return 'Missy';
+  return null;
+}
+// Inside a group, "Bokx Bonus" reads as just "Bonus".
+const shortName = (name, group) => group && name.startsWith(group + ' ') ? name.slice(group.length + 1) : name;
 function isPetCat(ref) { return !!S.settings.categories.find(c => c.id === ref)?.pets; }
 function fillPetDefaults() {
   if (!sheet || sheet.kind !== 'expense' || !isPetCat(sheet.ref)) return;
@@ -843,11 +886,11 @@ function renderSheet(focus) {
     <div class="field-label">${{ expense: 'Category', bill: 'Bill', income: 'Income', saving: 'Goal' }[sheet.kind]}</div>
     ${(() => {
       const chip = x => `<button data-act="ref" data-id="${x.id}" class="${sheet.ref === x.id ? 'on' : ''}">${smallIcon(x.icon)}${esc(x.name)}</button>`;
-      if (sheet.kind !== 'bill') return `<div class="pick">${pool.map(chip).join('')}</div>`;
+      if (sheet.kind !== 'bill' && sheet.kind !== 'income') return `<div class="pick">${pool.map(chip).join('')}</div>`;
       const groups = billGroups(pool);
       const singles = groups.filter(g => g.single).map(g => g.single);
       return `<div class="pick">${singles.map(chip).join('')}</div>` +
-        groups.filter(g => !g.single).map(g => `<div class="pick-group">${esc(g.name)}</div><div class="pick">${g.items.map(chip).join('')}</div>`).join('');
+        groups.filter(g => !g.single).map(g => `<div class="pick-group">${esc(g.name)}</div><div class="pick">${g.items.map(x => chip({ ...x, name: shortName(x.name, g.name) })).join('')}</div>`).join('');
     })()}
     ${sheet.kind === 'expense' && isPetCat(sheet.ref) ? `
       ${(st.pets || []).length > 1 ? `<div class="field-label">Which pet</div>
@@ -908,7 +951,7 @@ async function quickAdd(kind, ref) {
   const item = poolFor(kind).find(x => x.id === ref);
   if (!item) return;
   let amount = 0, who = S.me || 'Bokx';
-  if (kind === 'income') { amount = item.amount; if (item.icon === 'bokx') who = 'Bokx'; if (item.icon === 'missy') who = 'Missy'; }
+  if (kind === 'income') { amount = item.amount; who = incomeWho(item) || who; }
   if (kind === 'bill') { const plan = billPlan(item, S.m); const paid = sum(txOfMonth(S.y, S.m).filter(t => t.kind === 'bill' && t.ref === ref), t => t.amount); amount = Math.max(plan - paid, 0); }
   if (kind === 'saving') { const got = sum(txOfMonth(S.y, S.m).filter(t => t.kind === 'saving' && t.ref === ref), t => t.amount); amount = Math.max(item.monthly - got, 0); }
   // Open the sheet pre-filled so the amount can be checked before saving.
@@ -966,7 +1009,9 @@ function settingsView() {
       ${d.income.map((x, i) => `<div class="set-row">
         <div class="line">${textInput(`income.${i}.icon`, x.icon, '', 'icon-inp')}${textInput(`income.${i}.name`, x.name, 'Name')}<button class="x-btn" data-act="rm" data-list="income" data-i="${i}" aria-label="Remove">×</button></div>
         <div class="line">${moneyInput(`income.${i}.amount`, x.amount)}</div>
+        <div class="line"><span class="mini" style="margin:0;flex:none">Group</span><input class="inp" list="inc-grp-list" data-set="income.${i}.group" value="${esc(x.group || '')}" placeholder="None (e.g. Bokx)"></div>
       </div>`).join('')}
+      <datalist id="inc-grp-list"><option value="Bokx"><option value="Missy"></datalist>
       <button class="add-row" data-act="addrow" data-list="income">+ Add income</button>
     </section>
 
@@ -1067,6 +1112,7 @@ async function saveSettings() {
   d.pets = d.pets || [];
   ['income', 'bills', 'categories', 'goals', 'pets'].forEach(k => { d[k] = d[k].filter(x => x.name.trim()); d[k].forEach(x => { x.name = x.name.trim(); x.icon = (x.icon || '').trim() || '•'; }); });
   d.bills.forEach(b => { b.group = (b.group || '').trim(); });
+  d.income.forEach(x => { x.group = (x.group || '').trim(); if (['Bokx', 'Missy'].includes(x.group)) x.who = x.group; else delete x.who; });
   d.categories.forEach(c => {
     if (c.subs) c.subs = c.subs.filter(x => (x.name || '').trim()).map(x => ({ name: x.name.trim(), icon: (x.icon || '').trim() || '•', price: x.price || 0 }));
     if (c.period !== 'year') delete c.period;
@@ -1139,7 +1185,7 @@ document.addEventListener('click', async e => {
       break;
     case 'ref':
       readSheetInputs(); if (sheet.ref !== el.dataset.id) sheet.sub = null; sheet.ref = el.dataset.id; fillPetDefaults();
-      if (sheet.kind === 'income') { const inc = S.settings.income.find(i => i.id === sheet.ref); if (inc?.icon === 'missy') sheet.who = 'Missy'; if (inc?.icon === 'bokx') sheet.who = 'Bokx'; }
+      if (sheet.kind === 'income') { const w = incomeWho(S.settings.income.find(i => i.id === sheet.ref)); if (w) sheet.who = w; }
       renderSheet(false);
       break;
     case 'who': readSheetInputs(); sheet.who = el.dataset.p; renderSheet(false); break;
