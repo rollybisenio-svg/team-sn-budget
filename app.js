@@ -317,12 +317,18 @@ function setTheme(k) {
   S.keepScroll = true; render();
 }
 
+// The app always opens on the current month.
 function setInitialMonth() {
   const d = new Date();
-  const year = S.settings?.year || 2027;
-  if (d.getFullYear() === year) { S.y = year; S.m = d.getMonth() + 1; }
-  else { S.y = year; S.m = d.getFullYear() > year ? 12 : 1; }
+  S.y = d.getFullYear(); S.m = d.getMonth() + 1;
+  S.openedYm = ym(S.y, S.m);
 }
+// If the app is left open into a new month, jump to it when it comes back on screen.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible' || !S.settings) return;
+  const d = new Date();
+  if (ym(d.getFullYear(), d.getMonth() + 1) !== S.openedYm && !sheet) { setInitialMonth(); S.keepScroll = true; render(); }
+});
 
 /* ---------------- calculations ---------------- */
 function billPlan(b, m) {
@@ -506,7 +512,7 @@ function homeView() {
         <div class="main"><div class="name">${esc(i.name)}</div><div class="detail num">Planned ${money(i.amount)}</div></div>
         ${i.got > 0
           ? `<div class="amt num" style="color:var(--green)">${money(i.got)}<small>received</small></div>`
-          : i.amount > 0 ? `<button class="act green" data-act="quick" data-kind="income" data-ref="${i.id}">Received</button>`
+          : i.amount > 0 ? `<button class="act green" data-act="quick" data-kind="income" data-ref="${i.id}">Mark received</button>`
           : `<button class="act soft" data-act="add" data-kind="income" data-ref="${i.id}">Add</button>`}
       </div>`).join('')}
     </section>
@@ -950,8 +956,6 @@ function settingsView() {
     <section class="card">
       <div class="field-label" style="margin-top:0">This phone belongs to</div>
       <div class="me-pick">${['Bokx', 'Missy'].map(p => `<button data-act="setme" data-p="${p}" class="${S.me === p ? 'on' : ''}"><img src="${AVATAR[p.toLowerCase()]}" alt="">${p}</button>`).join('')}</div>
-      <div class="field-label">Budget year</div>
-      <input class="inp num" inputmode="numeric" data-set="year" data-type="int" value="${esc(d.year)}" style="max-width:120px">
     </section>
 
     <div class="sec-title"><h2><span class="dot" style="background:var(--accent)"></span>Theme <span class="jp">色</span></h2><span class="meta">This phone only</span></div>
