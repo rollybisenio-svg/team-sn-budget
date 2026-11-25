@@ -49,9 +49,9 @@ const BUDGET_BILLS = [
   { id: 'bill_col', name: 'COL Financial', amount: 0, freq: 'monthly', month: 1, icon: '📈', group: 'Insurances' },
   { id: 'bill_raye_school', name: "Raye's School Fee", amount: 100000, freq: 'monthly', month: 1, icon: '🎒', group: 'Raye' },
   { id: 'bill_raye_piano', name: "Raye's Piano Lesson", amount: 70000, freq: 'monthly', month: 1, icon: '🎹', group: 'Raye' },
-  { id: 'bill_raye_taxi', name: 'School Taxi Allowance', amount: 30000, freq: 'monthly', month: 1, icon: '🚕', group: 'Raye' },
-  { id: 'bill_church', name: 'Church Giving', amount: 50000, freq: 'monthly', month: 1, icon: '⛪', group: 'Family & Giving' },
-  { id: 'bill_remit', name: 'Family Remittance', amount: 50000, freq: 'monthly', month: 1, icon: '💸', group: 'Family & Giving' },
+  { id: 'bill_raye_taxi', name: 'School Taxi Allowance', amount: 30000, freq: 'monthly', month: 1, icon: '🚕', group: 'Raye', flex: true },
+  { id: 'bill_church', name: 'Church Giving', amount: 50000, freq: 'monthly', month: 1, icon: '⛪', group: 'Family & Giving', flex: true },
+  { id: 'bill_remit', name: 'Family Remittance', amount: 50000, freq: 'monthly', month: 1, icon: '💸', group: 'Family & Giving', flex: true },
   { id: 'bill_allow_missy', name: 'Missy Allowance', amount: 60000, freq: 'monthly', month: 1, icon: 'missy', group: 'Allowances' },
   { id: 'bill_allow_bokx', name: 'Bokx Allowance', amount: 60000, freq: 'monthly', month: 1, icon: 'bokx', group: 'Allowances' },
   ...CAR_BILLS,
@@ -92,13 +92,13 @@ const DEFAULT_SETTINGS = {
     { id: 'goal_school', name: 'School Savings', target: 0, monthly: 0, start: 0, icon: '🎓' },
   ],
   methods: ['Cash', 'Debit Card', 'Credit Card', 'Google Pay'],
-  migrated: ['util-split', 'groups-v1', 'pets-v2', 'budget-v3', 'income-v2', 'savings-v2', 'bills-v4'],
+  migrated: ['util-split', 'groups-v1', 'pets-v2', 'budget-v3', 'income-v2', 'savings-v2', 'bills-v4', 'flex-v5'],
 };
 
 // One-time updates to a budget that was already set up.
 function migrate(s) {
   const done = s.migrated || [];
-  if (['util-split', 'groups-v1', 'pets-v2', 'budget-v3', 'income-v2', 'savings-v2', 'bills-v4'].every(k => done.includes(k))) return null;
+  if (['util-split', 'groups-v1', 'pets-v2', 'budget-v3', 'income-v2', 'savings-v2', 'bills-v4', 'flex-v5'].every(k => done.includes(k))) return null;
   const out = clone(s);
   out.bills = out.bills || [];
   if (!done.includes('util-split')) {
@@ -167,7 +167,11 @@ function migrate(s) {
     else bills.push(sss, col);
     CAR_BILLS.forEach(c => { if (!bills.some(b => b.id === c.id)) bills.push(clone(c)); });
   }
-  out.migrated = [...new Set([...done, 'util-split', 'groups-v1', 'pets-v2', 'budget-v3', 'income-v2', 'savings-v2', 'bills-v4'])];
+  if (!done.includes('flex-v5')) {
+    // These have a monthly budget but are paid bit by bit.
+    out.bills.forEach(b => { if (['bill_raye_taxi', 'bill_church', 'bill_remit'].includes(b.id)) b.flex = true; });
+  }
+  out.migrated = [...new Set([...done, 'util-split', 'groups-v1', 'pets-v2', 'budget-v3', 'income-v2', 'savings-v2', 'bills-v4', 'flex-v5'])];
   return out;
 }
 
@@ -530,7 +534,7 @@ function homeView() {
   const ringColor = pct > 1 ? '#C2405A' : pct >= 0.8 ? '#E6B53C' : T.primary;
   const visibleBills = st.bills.filter(b => b.plan > 0 || b.paid > 0 || !b.amount);
   const hiddenBills = st.bills.length - visibleBills.length;
-  const unpaid = visibleBills.filter(b => b.plan > 0 && (b.status === 'due' || b.status === 'part')).length;
+  const unpaid = visibleBills.filter(b => b.plan > 0 && !b.flex && (b.status === 'due' || b.status === 'part')).length;
   const hasAny = st.list.length > 0;
 
   return hero('Team SN Budget', 'month') + `<main>
@@ -622,7 +626,19 @@ function incomeGroupRow(g) {
   </div>
   ${open ? `<div class="grp-items">${g.items.map(i => incomeRow(i, true, g.name)).join('')}</div>` : ''}`;
 }
+function flexRow(b, sub) {
+  const p = b.plan ? b.paid / b.plan : (b.paid ? 2 : 0);
+  const left = b.plan - b.paid;
+  return `<div class="row ${sub ? 'sub-row' : ''}">
+    ${icon(b.icon)}
+    <div class="main"><div class="name">${esc(b.name)}</div>
+      <div class="bar ${barClass(p)}"><i style="width:${Math.min(p, 1) * 100}%"></i></div>
+      <div class="cat-line num"><span>${money(b.paid, { noCur: true })} of ${money(b.plan, { noCur: true })}</span><span class="${left < 0 ? 'over' : ''}">${left < 0 ? `${money(-left, { noCur: true })} over` : `${money(left, { noCur: true })} left`}</span></div></div>
+    <button class="act soft plus" data-act="add" data-kind="bill" data-ref="${b.id}" aria-label="Add amount">+</button>
+  </div>`;
+}
 function billRow(b, sub = false) {
+  if (b.flex && b.plan) return flexRow(b, sub);
   return `<div class="row ${sub ? 'sub-row' : ''}">
     ${icon(b.icon)}
     <div class="main"><div class="name">${esc(b.name)}</div>
@@ -635,9 +651,12 @@ function billRow(b, sub = false) {
 function billGroupRow(g) {
   const open = openGroups.has(g.name);
   const plan = sum(g.items, b => b.plan), paid = sum(g.items, b => b.paid);
-  const planned = g.items.filter(b => b.plan > 0);
+  const planned = g.items.filter(b => b.plan > 0 && !b.flex);
+  const flex = g.items.filter(b => b.plan > 0 && b.flex);
   const nPaid = planned.filter(b => b.status === 'paid').length, n = planned.length;
-  const pill = !n ? (paid ? `<span class="pill paid">${money(paid, { noCur: true })}</span>` : '')
+  const flexLeft = sum(flex, b => b.plan - b.paid);
+  const pill = !n && flex.length ? `<span class="pill ${flexLeft < 0 ? 'due' : 'paid'}">${flexLeft < 0 ? `${money(-flexLeft, { noCur: true })} over` : `${money(flexLeft, { noCur: true })} left`}</span>`
+    : !n ? (paid ? `<span class="pill paid">${money(paid, { noCur: true })}</span>` : '')
     : nPaid === n ? `<span class="pill paid">Paid</span>`
     : nPaid > 0 || paid > 0 ? `<span class="pill part">${nPaid}/${n} paid</span>`
     : `<span class="pill due">${n} to pay</span>`;
@@ -764,7 +783,7 @@ function areaResults(months) {
     months.forEach(({ y, m, current }) => {
       const p = billPlan(b, m);
       const a = sum(txOfMonth(y, m).filter(t => t.kind === 'bill' && t.ref === b.id), t => t.amount);
-      if (current && a === 0) return;
+      if (current && a === 0 && !b.flex) return;
       plan += p; actual += a;
     });
     const k = billKey(b);
@@ -1269,6 +1288,7 @@ function settingsView() {
       ${d.bills.map((x, i) => `<div class="set-row">
         <div class="line">${iconField(`bills.${i}.icon`, x.icon)}${textInput(`bills.${i}.name`, x.name, 'Name')}<button class="x-btn" data-act="rm" data-list="bills" data-i="${i}" aria-label="Remove">×</button></div>
         <div class="line">${moneyInput(`bills.${i}.amount`, x.amount)}${freqSel(`bills.${i}.freq`, x.freq)}</div>
+        <label class="check"><input type="checkbox" data-set="bills.${i}.flex" data-type="bool" ${x.flex ? 'checked' : ''}> Budget only: add amounts bit by bit</label>
         <div class="line"><span class="mini" style="margin:0;flex:none">Group</span><input class="inp" list="grp-list" data-set="bills.${i}.group" value="${esc(x.group || '')}" placeholder="None (e.g. Utilities)"></div>
         ${x.freq !== 'monthly' ? `<div class="line"><span class="mini" style="margin:0;flex:none">${x.freq === 'yearly' ? 'Paid in' : 'Due in'}</span>${monthSel(`bills.${i}.month`, x.month)}</div>` : ''}
       </div>`).join('')}
@@ -1507,6 +1527,7 @@ document.addEventListener('input', e => {
     if (el.dataset.type === 'money') v = toFils(v);
     if (el.dataset.type === 'int') v = parseInt(v, 10) || 0;
     if (el.dataset.type === 'yearcheck') v = el.checked ? 'year' : 'month';
+    if (el.dataset.type === 'bool') v = el.checked;
     setPath(d, el.dataset.set, v);
     // Show or hide the save bar without redrawing the whole page while typing.
     const bar = $('.save-bar');
