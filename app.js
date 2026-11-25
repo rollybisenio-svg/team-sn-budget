@@ -26,7 +26,16 @@ const PET_TYPES = [
   { name: 'Medical', icon: '💊' },
   { name: 'Grooming', icon: '✂️' },
 ];
-const GROUP_ICON = { 'Bokx': 'bokx', 'Missy': 'missy', 'TAQA': '⚡', 'Utilities': '💡', 'Phone & Internet': '📶', 'Pets': '🐾', 'Raye': 'girl', 'Family & Giving': '🤲', 'Allowances': '👛' };
+const GROUP_ICON = { 'Insurances': '🛡️', 'Car': '🚗', 'Bokx': 'bokx', 'Missy': 'missy', 'TAQA': '⚡', 'Utilities': '💡', 'Phone & Internet': '📶', 'Pets': '🐾', 'Raye': 'girl', 'Family & Giving': '🤲', 'Allowances': '👛' };
+
+// Bokx's car costs. Amounts start at 0 until they are known.
+const CAR_BILLS = [
+  { id: 'bill_car_mortgage', name: 'Car Mortgage', amount: 0, freq: 'monthly', month: 1, icon: '🚗', group: 'Car' },
+  { id: 'bill_car_maint', name: 'Car Maintenance', amount: 0, freq: 'monthly', month: 1, icon: '🔧', group: 'Car' },
+  { id: 'bill_petrol', name: 'Petrol', amount: 0, freq: 'monthly', month: 1, icon: '⛽', group: 'Car' },
+  { id: 'bill_car_ins', name: 'Car Insurance (annual)', amount: 0, freq: 'yearly', month: 1, icon: '🛡️', group: 'Car' },
+  { id: 'bill_car_reg', name: 'Car Registration/Renewal (annual)', amount: 0, freq: 'yearly', month: 1, icon: '📋', group: 'Car' },
+];
 
 // The family's agreed monthly budget (Nov 2026). Amounts are in fils.
 const BUDGET_BILLS = [
@@ -35,15 +44,17 @@ const BUDGET_BILLS = [
   { id: 'bill_water', name: 'Water', amount: 15000, freq: 'monthly', month: 1, icon: '💧', group: 'TAQA' },
   { id: 'bill_muni', name: 'Municipality Fee', amount: 25000, freq: 'monthly', month: 1, icon: '🏛️', group: 'TAQA' },
   { id: 'bill_eand', name: 'e& Home Wireless', amount: 23000, freq: 'monthly', month: 1, icon: '📡' },
-  { id: 'bill_sunlife', name: 'Sunlife Insurance', amount: 110000, freq: 'monthly', month: 1, icon: '🛡️' },
+  { id: 'bill_sunlife', name: 'Sunlife Insurance', amount: 110000, freq: 'monthly', month: 1, icon: '🛡️', group: 'Insurances' },
+  { id: 'bill_sss', name: 'SSS (Social Security)', amount: 50000, freq: 'monthly', month: 1, icon: '🪪', group: 'Insurances' },
+  { id: 'bill_col', name: 'COL Financial', amount: 0, freq: 'monthly', month: 1, icon: '📈', group: 'Insurances' },
   { id: 'bill_raye_school', name: "Raye's School Fee", amount: 100000, freq: 'monthly', month: 1, icon: '🎒', group: 'Raye' },
   { id: 'bill_raye_piano', name: "Raye's Piano Lesson", amount: 70000, freq: 'monthly', month: 1, icon: '🎹', group: 'Raye' },
   { id: 'bill_raye_taxi', name: 'School Taxi Allowance', amount: 30000, freq: 'monthly', month: 1, icon: '🚕', group: 'Raye' },
   { id: 'bill_church', name: 'Church Giving', amount: 50000, freq: 'monthly', month: 1, icon: '⛪', group: 'Family & Giving' },
-  { id: 'bill_sss', name: 'SSS (Social Security)', amount: 50000, freq: 'monthly', month: 1, icon: '🪪', group: 'Family & Giving' },
   { id: 'bill_remit', name: 'Family Remittance', amount: 50000, freq: 'monthly', month: 1, icon: '💸', group: 'Family & Giving' },
   { id: 'bill_allow_missy', name: 'Missy Allowance', amount: 60000, freq: 'monthly', month: 1, icon: 'missy', group: 'Allowances' },
   { id: 'bill_allow_bokx', name: 'Bokx Allowance', amount: 60000, freq: 'monthly', month: 1, icon: 'bokx', group: 'Allowances' },
+  ...CAR_BILLS,
 ];
 const BUDGET_CATS = [
   { id: 'cat_groc', name: 'Groceries', limit: 200000, icon: '🛒' },
@@ -81,13 +92,13 @@ const DEFAULT_SETTINGS = {
     { id: 'goal_school', name: 'School Savings', target: 0, monthly: 0, start: 0, icon: '🎓' },
   ],
   methods: ['Cash', 'Debit Card', 'Credit Card', 'Google Pay'],
-  migrated: ['util-split', 'groups-v1', 'pets-v2', 'budget-v3', 'income-v2', 'savings-v2'],
+  migrated: ['util-split', 'groups-v1', 'pets-v2', 'budget-v3', 'income-v2', 'savings-v2', 'bills-v4'],
 };
 
 // One-time updates to a budget that was already set up.
 function migrate(s) {
   const done = s.migrated || [];
-  if (['util-split', 'groups-v1', 'pets-v2', 'budget-v3', 'income-v2', 'savings-v2'].every(k => done.includes(k))) return null;
+  if (['util-split', 'groups-v1', 'pets-v2', 'budget-v3', 'income-v2', 'savings-v2', 'bills-v4'].every(k => done.includes(k))) return null;
   const out = clone(s);
   out.bills = out.bills || [];
   if (!done.includes('util-split')) {
@@ -144,7 +155,19 @@ function migrate(s) {
     const em = out.goals.find(g => g.id === 'goal_emerg');
     if (em && em.monthly === 200000) em.monthly = 0;
   }
-  out.migrated = [...new Set([...done, 'util-split', 'groups-v1', 'pets-v2', 'budget-v3', 'income-v2', 'savings-v2'])];
+  if (!done.includes('bills-v4')) {
+    // SSS joins Sunlife under Insurances with COL Financial; add the car bills.
+    const bills = out.bills;
+    const take = id => { const i = bills.findIndex(b => b.id === id); return i >= 0 ? bills.splice(i, 1)[0] : null; };
+    const sss = take('bill_sss') || { id: 'bill_sss', name: 'SSS (Social Security)', amount: 50000, freq: 'monthly', month: 1, icon: '🪪' };
+    const col = take('bill_col') || { id: 'bill_col', name: 'COL Financial', amount: 0, freq: 'monthly', month: 1, icon: '📈' };
+    sss.group = 'Insurances'; col.group = 'Insurances';
+    const sun = bills.find(b => b.id === 'bill_sunlife');
+    if (sun) { sun.group = 'Insurances'; bills.splice(bills.indexOf(sun) + 1, 0, sss, col); }
+    else bills.push(sss, col);
+    CAR_BILLS.forEach(c => { if (!bills.some(b => b.id === c.id)) bills.push(clone(c)); });
+  }
+  out.migrated = [...new Set([...done, 'util-split', 'groups-v1', 'pets-v2', 'budget-v3', 'income-v2', 'savings-v2', 'bills-v4'])];
   return out;
 }
 
@@ -505,9 +528,9 @@ function homeView() {
   const st = monthStats(S.y, S.m);
   const pct = st.spendPlan ? st.spent / st.spendPlan : 0;
   const ringColor = pct > 1 ? '#C2405A' : pct >= 0.8 ? '#E6B53C' : T.primary;
-  const visibleBills = st.bills.filter(b => b.plan > 0 || b.paid > 0);
+  const visibleBills = st.bills.filter(b => b.plan > 0 || b.paid > 0 || !b.amount);
   const hiddenBills = st.bills.length - visibleBills.length;
-  const unpaid = visibleBills.filter(b => b.status === 'due' || b.status === 'part').length;
+  const unpaid = visibleBills.filter(b => b.plan > 0 && (b.status === 'due' || b.status === 'part')).length;
   const hasAny = st.list.length > 0;
 
   return hero('Team SN Budget', 'month') + `<main>
@@ -603,22 +626,25 @@ function billRow(b, sub = false) {
   return `<div class="row ${sub ? 'sub-row' : ''}">
     ${icon(b.icon)}
     <div class="main"><div class="name">${esc(b.name)}</div>
-      <div class="detail num">${b.freq === 'split' ? `${money(b.plan)} monthly share` : money(b.plan)}${b.paid && b.paid !== b.plan ? ` · paid ${money(b.paid)}` : ''}</div></div>
-    ${b.status === 'paid' ? `<span class="pill paid">Paid</span>`
+      <div class="detail num">${!b.plan ? (b.freq === 'yearly' ? 'Yearly · amount not set' : 'Add when paid') : b.freq === 'split' ? `${money(b.plan)} monthly share` : money(b.plan)}${b.plan && b.paid && b.paid !== b.plan ? ` · paid ${money(b.paid)}` : ''}</div></div>
+    ${!b.plan ? (b.paid ? `<div class="amt num">${money(b.paid)}<small>this month</small></div><button class="act soft plus" data-act="add" data-kind="bill" data-ref="${b.id}" aria-label="Add more">+</button>` : `<button class="act soft" data-act="add" data-kind="bill" data-ref="${b.id}">Add</button>`)
+      : b.status === 'paid' ? `<span class="pill paid">Paid</span>`
       : `<button class="act" data-act="quick" data-kind="bill" data-ref="${b.id}">Pay</button>`}
   </div>`;
 }
 function billGroupRow(g) {
   const open = openGroups.has(g.name);
   const plan = sum(g.items, b => b.plan), paid = sum(g.items, b => b.paid);
-  const nPaid = g.items.filter(b => b.status === 'paid').length, n = g.items.length;
-  const pill = nPaid === n ? `<span class="pill paid">Paid</span>`
+  const planned = g.items.filter(b => b.plan > 0);
+  const nPaid = planned.filter(b => b.status === 'paid').length, n = planned.length;
+  const pill = !n ? (paid ? `<span class="pill paid">${money(paid, { noCur: true })}</span>` : '')
+    : nPaid === n ? `<span class="pill paid">Paid</span>`
     : nPaid > 0 || paid > 0 ? `<span class="pill part">${nPaid}/${n} paid</span>`
     : `<span class="pill due">${n} to pay</span>`;
   return `<div class="row grp" data-act="toggle" data-g="${esc(g.name)}" role="button" aria-expanded="${open}">
     ${icon(groupIcon(g))}
     <div class="main"><div class="name">${esc(g.name)}</div>
-      <div class="detail num">${n} bill${n > 1 ? 's' : ''} · ${money(plan)}${paid && paid !== plan ? ` · paid ${money(paid)}` : ''}</div></div>
+      <div class="detail num">${g.items.length} item${g.items.length > 1 ? 's' : ''}${plan ? ` · ${money(plan)}` : ''}${paid && paid !== plan ? ` · paid ${money(paid)}` : ''}</div></div>
     ${pill}${chev(open)}
   </div>
   ${open ? `<div class="grp-items">${g.items.map(b => billRow(b, true)).join('')}</div>` : ''}`;
