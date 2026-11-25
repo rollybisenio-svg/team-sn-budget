@@ -75,18 +75,19 @@ const DEFAULT_SETTINGS = {
   petTypes: PET_TYPES,
   categories: BUDGET_CATS,
   goals: [
-    { id: 'goal_emerg', name: 'Emergency Fund', target: 0, monthly: 200000, start: 0, icon: '🛟' },
+    { id: 'goal_family', name: 'Family Savings', target: 0, monthly: 200000, start: 0, icon: '🏦' },
+    { id: 'goal_emerg', name: 'Emergency Fund', target: 0, monthly: 0, start: 0, icon: '🛟' },
     { id: 'goal_travel', name: 'Travel', target: 0, monthly: 0, start: 0, icon: '✈️' },
     { id: 'goal_school', name: 'School Savings', target: 0, monthly: 0, start: 0, icon: '🎓' },
   ],
   methods: ['Cash', 'Debit Card', 'Credit Card', 'Google Pay'],
-  migrated: ['util-split', 'groups-v1', 'pets-v2', 'budget-v3', 'income-v2'],
+  migrated: ['util-split', 'groups-v1', 'pets-v2', 'budget-v3', 'income-v2', 'savings-v2'],
 };
 
 // One-time updates to a budget that was already set up.
 function migrate(s) {
   const done = s.migrated || [];
-  if (['util-split', 'groups-v1', 'pets-v2', 'budget-v3', 'income-v2'].every(k => done.includes(k))) return null;
+  if (['util-split', 'groups-v1', 'pets-v2', 'budget-v3', 'income-v2', 'savings-v2'].every(k => done.includes(k))) return null;
   const out = clone(s);
   out.bills = out.bills || [];
   if (!done.includes('util-split')) {
@@ -136,7 +137,14 @@ function migrate(s) {
     const others = old.filter(i => !['inc_bokx', 'inc_missy', 'inc_bonus'].includes(i.id) && !/^inc_(bokx|missy)_/.test(i.id));
     out.income = [...personIncome('Bokx', sal('inc_bokx') ?? 700000), ...personIncome('Missy', sal('inc_missy') ?? 1200000), ...others];
   }
-  out.migrated = [...new Set([...done, 'util-split', 'groups-v1', 'pets-v2', 'budget-v3', 'income-v2'])];
+  if (!done.includes('savings-v2')) {
+    // The 2,000 a month goes to Family Savings; Emergency Fund is topped up by hand.
+    out.goals = out.goals || [];
+    if (!out.goals.some(g => g.id === 'goal_family')) out.goals.unshift({ id: 'goal_family', name: 'Family Savings', target: 0, monthly: 200000, start: 0, icon: '🏦' });
+    const em = out.goals.find(g => g.id === 'goal_emerg');
+    if (em && em.monthly === 200000) em.monthly = 0;
+  }
+  out.migrated = [...new Set([...done, 'util-split', 'groups-v1', 'pets-v2', 'budget-v3', 'income-v2', 'savings-v2'])];
   return out;
 }
 
@@ -398,6 +406,7 @@ function render() {
   let body = '';
   if (S.view === 'home') body = homeView();
   else if (S.view === 'year') body = yearView();
+  else if (S.view === 'savings') body = savingsView();
   else if (S.view === 'history') body = historyView();
   else body = settingsView();
 
@@ -427,18 +436,18 @@ function hero(title, withMonth) {
       <button data-act="month" data-d="-1" aria-label="Previous month">‹</button>
       <div class="label">${MONTHS[S.m - 1]} ${S.y}</div>
       <button data-act="month" data-d="1" aria-label="Next month">›</button>
-    </div>` : withMonth === 'year' ? `<div class="month-switch">
+    </div>` : withMonth === 'year' ? `${S.view === 'year' ? reportTabs() : ''}<div class="month-switch" style="margin-top:10px">
       <button data-act="year" data-d="-1" aria-label="Previous year">‹</button>
       <div class="label">${S.y}</div>
       <button data-act="year" data-d="1" aria-label="Next year">›</button>
-    </div>` : '<div style="height:18px"></div>'}
+    </div>` : withMonth === 'tabs' ? reportTabs() : '<div style="height:18px"></div>'}
   </header>`;
 }
 
 function navView() {
   const b = (v, ic, label) => `<button data-act="view" data-v="${v}" class="${S.view === v ? 'on' : ''}">${ICONS[ic]}${label}</button>`;
   return `<nav class="nav">
-    ${b('home', 'home', 'Home')}${b('year', 'year', 'Year')}
+    ${b('home', 'home', 'Home')}<button data-act="view" data-v="${S.reportTab || 'savings'}" class="${S.view === 'year' || S.view === 'savings' ? 'on' : ''}">${ICONS.year}Reports</button>
     <div><button class="add" data-act="add" aria-label="Add entry">${ICONS.plus}</button></div>
     ${b('history', 'list', 'History')}${b('settings', 'gear', 'Settings')}
   </nav>`;
@@ -546,7 +555,7 @@ function homeView() {
             <div class="detail num">This month ${money(g.saved)}${g.monthly ? ` of ${money(g.monthly)}` : ''} · total ${money(total)}</div>
             ${g.target ? `<div class="bar teal"><i style="width:${Math.min(p, 1) * 100}%"></i></div><div class="cat-line num"><span>${Math.round(p * 100)}% of ${money(g.target)}</span></div>` : ''}
           </div>
-          ${g.monthly && g.saved < g.monthly ? `<button class="act soft" data-act="quick" data-kind="saving" data-ref="${g.id}">Save</button>` : g.monthly ? `<span class="pill paid">Done</span>` : ''}
+          ${g.monthly && g.saved < g.monthly ? `<button class="act soft" data-act="quick" data-kind="saving" data-ref="${g.id}">Save</button>` : g.monthly ? `<span class="pill paid">Done</span>` : `<button class="act soft" data-act="add" data-kind="saving" data-ref="${g.id}">Add</button>`}
         </div>`;
       }).join('')}
     </section>
@@ -676,9 +685,9 @@ function barChart(months) {
     <div class="legend"><span><i style="background:${T.income}"></i>Income</span><span><i style="background:${T.spend}"></i>Spent</span><span><i style="background:${T.save};opacity:.75"></i>Saved</span></div>`;
 }
 
-function donut(items) {
+function donut(items, emptyText = 'Nothing spent yet this year.', center = 'TOTAL') {
   const total = sum(items, x => x.v);
-  if (!total) return `<div class="empty"><img src="${AVATAR.sky}" alt="">Nothing spent yet this year.</div>`;
+  if (!total) return `<div class="empty"><img src="${AVATAR.sky}" alt="">${esc(emptyText)}</div>`;
   const r = 50, c = 2 * Math.PI * r;
   let off = 0, arcs = '';
   items.forEach((x, i) => {
@@ -688,12 +697,207 @@ function donut(items) {
     off += len;
   });
   return `<div class="donut-wrap">
-    <svg viewBox="0 0 140 140">${arcs}<text x="70" y="66" text-anchor="middle" font-size="10" fill="${T.muted}" font-weight="800">TOTAL</text><text x="70" y="82" text-anchor="middle" font-size="14" fill="${T.ink}" font-weight="900">${short(total)}</text></svg>
+    <svg viewBox="0 0 140 140">${arcs}<text x="70" y="66" text-anchor="middle" font-size="10" fill="${T.muted}" font-weight="800">${esc(center)}</text><text x="70" y="82" text-anchor="middle" font-size="14" fill="${T.ink}" font-weight="900">${short(total)}</text></svg>
     <div class="donut-legend">${items.map((x, i) => x.v ? `<div><i style="background:${T.pie[i % T.pie.length]}"></i><span>${esc(x.name)}</span><b class="num">${Math.round(x.v / total * 100)}%</b></div>` : '').join('')}</div>
   </div>`;
 }
 
+/* ---------------- SAVINGS REPORT ---------------- */
+function reportTabs() {
+  const t = S.view === 'year' ? 'year' : 'savings';
+  return `<div class="report-tabs">
+    <button data-act="view" data-v="savings" class="${t === 'savings' ? 'on' : ''}">Savings 貯金</button>
+    <button data-act="view" data-v="year" class="${t === 'year' ? 'on' : ''}">Year overview 年間</button>
+  </div>`;
+}
+
+// Months from the first entry up to this month.
+function trackedMonths() {
+  const d = new Date(), cur = { y: d.getFullYear(), m: d.getMonth() + 1 };
+  const dates = S.tx.map(t => t.date).filter(Boolean).sort();
+  let y = cur.y, m = cur.m;
+  if (dates.length) { y = Number(dates[0].slice(0, 4)); m = Number(dates[0].slice(5, 7)); }
+  if (y * 12 + m > cur.y * 12 + cur.m) { y = cur.y; m = cur.m; }
+  const out = [];
+  while (y * 12 + m <= cur.y * 12 + cur.m) {
+    out.push({ y, m, current: y === cur.y && m === cur.m });
+    m++; if (m > 12) { m = 1; y++; }
+  }
+  return out;
+}
+
+// Budget vs actual for each area over a set of months. Bills not yet paid in the
+// running month are left out, so an unpaid bill never looks like a saving.
+function areaResults(months) {
+  const st = S.settings;
+  const rows = [];
+  const billKey = b => (b.group || '').trim() || b.id;
+  const groups = {};
+  st.bills.forEach(b => {
+    let plan = 0, actual = 0;
+    months.forEach(({ y, m, current }) => {
+      const p = billPlan(b, m);
+      const a = sum(txOfMonth(y, m).filter(t => t.kind === 'bill' && t.ref === b.id), t => t.amount);
+      if (current && a === 0) return;
+      plan += p; actual += a;
+    });
+    const k = billKey(b);
+    if (!groups[k]) {
+      groups[k] = { name: (b.group || '').trim() || b.name, icon: (b.group || '').trim() ? (GROUP_ICON[b.group] || b.icon) : b.icon, plan: 0, actual: 0, type: 'Bill' };
+      rows.push(groups[k]);
+    }
+    groups[k].plan += plan; groups[k].actual += actual;
+  });
+  st.categories.forEach(c => {
+    let plan = 0, actual = 0;
+    months.forEach(({ y, m }) => {
+      plan += c.limit;
+      actual += sum(txOfMonth(y, m).filter(t => t.kind === 'expense' && t.ref === c.id), t => t.amount);
+    });
+    rows.push({ name: c.name, icon: c.icon, plan, actual, type: c.period === 'year' ? 'Spread over the year' : 'Everyday' });
+  });
+  return rows.filter(r => r.plan || r.actual).map(r => ({ ...r, diff: r.plan - r.actual }));
+}
+
+function savingsChart(series) {
+  const W = 340, H = 200, pl = 40, pr = 8, pb = 24, pt = 12;
+  const vals = series.flatMap(x => [x.net, x.run, 0]);
+  let max = Math.max(...vals), min = Math.min(...vals);
+  if (max === min) max = min + 100000;
+  const span = max - min, step = Math.pow(10, Math.floor(Math.log10(span / 3 || 1)));
+  const lo = Math.floor(min / step) * step, hi = Math.ceil(max / step) * step;
+  const y = v => pt + (H - pt - pb) * (1 - (v - lo) / (hi - lo || 1));
+  const n = series.length, cw = (W - pl - pr) / Math.max(n, 1), bw = Math.min(cw * 0.5, 26);
+  let g = '';
+  for (let i = 0; i <= 4; i++) {
+    const v = lo + (hi - lo) * i / 4;
+    g += `<line x1="${pl}" x2="${W - pr}" y1="${y(v)}" y2="${y(v)}" stroke="${T.line}"/><text x="${pl - 5}" y="${y(v) + 3}" text-anchor="end" font-size="9" fill="${T.muted}" font-weight="700">${short(v)}</text>`;
+  }
+  g += `<line x1="${pl}" x2="${W - pr}" y1="${y(0)}" y2="${y(0)}" stroke="${T.muted}" stroke-width="1" opacity=".6"/>`;
+  const pts = [];
+  series.forEach((x, i) => {
+    const cx = pl + cw * i + cw / 2;
+    const top = Math.min(y(x.net), y(0)), h = Math.abs(y(x.net) - y(0));
+    g += `<rect x="${cx - bw / 2}" y="${top}" width="${bw}" height="${Math.max(h, 1)}" rx="3" fill="${x.net < 0 ? '#C2405A' : T.income}" opacity="${x.current ? 0.55 : 0.9}"/>`;
+    const lbl = n > 8 ? MON[x.m - 1][0] : MON[x.m - 1];
+    g += `<text x="${cx}" y="${H - 8}" text-anchor="middle" font-size="9.5" fill="${x.current ? T.primary : T.muted}" font-weight="800">${lbl}</text>`;
+    pts.push([cx, y(x.run)]);
+  });
+  if (pts.length > 1) g += `<polyline points="${pts.map(p => p.join(',')).join(' ')}" fill="none" stroke="${T.save}" stroke-width="2.5" stroke-linejoin="round"/>`;
+  pts.forEach(([cx, cy]) => { g += `<circle cx="${cx}" cy="${cy}" r="3.5" fill="#fff" stroke="${T.save}" stroke-width="2"/>`; });
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Saved each month and running total">${g}</svg>
+    <div class="legend"><span><i style="background:${T.income}"></i>Saved that month</span><span><i style="background:${T.save};height:3px;border-radius:2px;vertical-align:3px"></i>Running total</span></div>`;
+}
+
+function savingsView() {
+  S.reportTab = 'savings';
+  const st = S.settings;
+  const months = trackedMonths();
+  let run = 0;
+  const series = months.map(mm => {
+    const s = monthStats(mm.y, mm.m);
+    const net = s.incomeGot - s.spent;
+    run += net;
+    const toGoals = s.saved, plan = sum(st.goals, g => g.monthly);
+    return { ...mm, inc: s.incomeGot, spent: s.spent, net, run, toGoals, plan, rate: s.incomeGot ? net / s.incomeGot : 0 };
+  });
+  const cur = series[series.length - 1];
+  const done = series.filter(x => !x.current);
+  const avg = done.length ? sum(done, x => x.net) / done.length : (cur ? cur.net : 0);
+  const totalInc = sum(series, x => x.inc);
+  const rate = totalInc ? run / totalInc : 0;
+
+  // goals: running balances
+  const goals = st.goals.map(g => ({ ...g, bal: g.start + sum(S.tx.filter(t => t.kind === 'saving' && t.ref === g.id), t => t.amount) }));
+  const goalTotal = sum(goals, g => g.bal);
+
+  // areas: pick the period
+  const hasDone = done.some(x => x.inc || x.spent);
+  if (!S.areaScope) S.areaScope = hasDone ? 'last' : 'cur';
+  const scopeMonths = S.areaScope === 'cur' ? series.filter(x => x.current)
+    : S.areaScope === 'last' ? done.slice(-1) : done;
+  const areas = areaResults(scopeMonths);
+  const under = areas.filter(a => a.diff > 0).sort((a, b) => b.diff - a.diff);
+  const over = areas.filter(a => a.diff < 0).sort((a, b) => a.diff - b.diff);
+  const onTarget = areas.filter(a => a.diff === 0 && a.plan);
+  const scopeLabel = S.areaScope === 'cur' ? `${MONTHS[cur.m - 1]} so far` : S.areaScope === 'last' ? (done.length ? `${MONTHS[done[done.length - 1].m - 1]} ${done[done.length - 1].y}` : 'Last month') : (done.length ? `${MON[done[0].m - 1]} ${done[0].y} – ${MON[done[done.length - 1].m - 1]} ${done[done.length - 1].y}` : 'All finished months');
+  const maxDiff = Math.max(1, ...areas.map(a => Math.abs(a.diff)));
+  const chip = (v, label) => `<button class="fchip ${S.areaScope === v ? 'on' : ''}" data-act="areascope" data-v="${v}">${label}</button>`;
+  const areaRow = (a, good) => `<div class="row">
+      ${icon(a.icon)}
+      <div class="main"><div class="name">${esc(a.name)}</div>
+        <div class="bar ${good ? '' : 'over'}"><i style="width:${Math.abs(a.diff) / maxDiff * 100}%"></i></div>
+        <div class="cat-line num"><span>${a.type === 'Bill' && a.actual === 0 ? `Nothing paid of ${money(a.plan)} · not logged yet?` : `Spent ${money(a.actual)} of ${money(a.plan)}`}${a.type === 'Spread over the year' ? ' · bought every few months' : ''}</span></div></div>
+      <div class="amt num" style="color:${good ? 'var(--green)' : 'var(--red)'}">${good ? '+' : '−'}${money(Math.abs(a.diff), { noCur: true })}<small>${good ? 'saved' : 'over'}</small></div>
+    </div>`;
+
+  return hero('Savings', 'tabs') + `<main>
+    <section class="card summary">
+      <div class="summary-top">
+        <div class="left">
+          <div class="lbl">Total saved so far</div>
+          <div class="big num ${run < 0 ? 'neg' : ''}">${money(run)}</div>
+          <div class="sub">Since ${MONTHS[series[0].m - 1]} ${series[0].y} · money in minus money spent</div>
+        </div>
+        <div class="ring">${ring(rate / 0.25, T.save)}<div class="c"><b>${Math.round(rate * 100)}%</b><span>of income</span></div></div>
+      </div>
+      <div class="kpis">
+        <div class="kpi in"><div class="k">This month</div><div class="v num">${money(cur.net, { noCur: true })}</div></div>
+        <div class="kpi out"><div class="k">Average</div><div class="v num">${money(Math.round(avg), { noCur: true })}</div></div>
+        <div class="kpi sv"><div class="k">In goals</div><div class="v num">${money(goalTotal, { noCur: true })}</div></div>
+      </div>
+    </section>
+
+    <div class="sec-title"><h2><span class="dot" style="background:var(--green)"></span>Saved each month <span class="jp">月別</span></h2><span class="meta">AED</span></div>
+    <section class="card">${savingsChart(series)}</section>
+
+    <section class="card" style="padding:6px 16px">
+      ${series.slice().reverse().map(x => `<div class="row">
+        <div class="month-chip ${x.current ? 'cur' : ''}"><b>${MON[x.m - 1]}</b><span>${x.y}</span></div>
+        <div class="main">
+          <div class="name num" style="color:${x.net < 0 ? 'var(--red)' : 'var(--green)'}">${money(x.net)}${x.current ? ' <span class="name-sub">so far</span>' : ''}</div>
+          <div class="detail num">In ${money(x.inc, { noCur: true })} · spent ${money(x.spent, { noCur: true })} · ${Math.round(x.rate * 100)}%</div>
+        </div>
+        <div class="amt num">${money(x.run, { noCur: true })}<small>running total</small></div>
+      </div>`).join('')}
+    </section>
+
+    <div class="sec-title"><h2><span class="dot" style="background:var(--teal)"></span>Savings goals <span class="jp">貯金</span></h2><span class="meta num">${money(goalTotal)}</span></div>
+    <section class="card">
+      ${donut(goals.map(g => ({ name: g.name, v: Math.max(g.bal, 0) })), 'No money in savings goals yet.', 'SAVED')}
+      <div style="margin-top:10px">${goals.map(g => {
+        const monthIn = sum(txOfMonth(cur.y, cur.m).filter(t => t.kind === 'saving' && t.ref === g.id), t => t.amount);
+        return `<div class="row">${icon(g.icon)}<div class="main"><div class="name">${esc(g.name)}</div>
+          <div class="detail num">${g.monthly ? `This month ${money(monthIn)} of ${money(g.monthly)}` : `This month ${money(monthIn)}`}${g.target ? ` · target ${money(g.target)}` : ''}</div>
+          ${g.target ? `<div class="bar teal"><i style="width:${Math.min(g.bal / g.target, 1) * 100}%"></i></div>` : ''}</div>
+          <div class="amt num" style="color:var(--teal)">${money(g.bal, { noCur: true })}<small>balance</small></div></div>`;
+      }).join('')}</div>
+    </section>
+
+    <div class="sec-title"><h2><span class="dot" style="background:var(--blue)"></span>Where you saved <span class="jp">予算</span></h2></div>
+    <div class="filters">${chip('cur', 'This month so far')}${done.length ? chip('last', 'Last month') + chip('all', 'All months') : ''}</div>
+    <section class="card summary" style="padding:14px 16px">
+      <div class="lbl">${esc(scopeLabel)}</div>
+      <div class="kpis" style="margin-top:8px">
+        <div class="kpi in"><div class="k">Under budget</div><div class="v num">${money(sum(under, a => a.diff), { noCur: true })}</div></div>
+        <div class="kpi out" style="background:var(--red-l);color:var(--red)"><div class="k">Over budget</div><div class="v num">${money(-sum(over, a => a.diff), { noCur: true })}</div></div>
+        <div class="kpi sv"><div class="k">On budget</div><div class="v num">${onTarget.length}</div></div>
+      </div>
+      ${S.areaScope === 'cur' ? '<div class="detail" style="font-size:12px;color:var(--muted);font-weight:700;margin-top:10px">The month isn’t over, so spending limits still have room. Bills count once they are paid.</div>' : ''}
+    </section>
+    ${under.length ? `<section class="card">
+      <div class="area-head good">Did well 👏</div>
+      ${donut(under.map(a => ({ name: a.name, v: a.diff })), '', 'SAVED')}
+      <div style="margin-top:6px">${under.map(a => areaRow(a, true)).join('')}</div>
+    </section>` : ''}
+    ${over.length ? `<section class="card"><div class="area-head bad">Went over</div>${over.map(a => areaRow(a, false)).join('')}</section>` : ''}
+    ${!under.length && !over.length ? `<section class="card"><div class="empty"><img src="${AVATAR.sky}" alt="">Nothing to compare yet. Add some entries first.</div></section>` : ''}
+    <div class="foot">Saved = money in minus bills and spending. Money moved into savings goals counts as saved.</div>
+  </main>`;
+}
+
 function yearView() {
+  S.reportTab = 'year';
   const st = S.settings;
   const months = MONTHS.map((_, i) => {
     const s = monthStats(S.y, i + 1);
@@ -1233,6 +1437,7 @@ document.addEventListener('click', async e => {
     case 'savesettings': await saveSettings(); S.keepScroll = true; render(); break;
     case 'export': exportCsv(); break;
     case 'theme': setTheme(el.dataset.k); break;
+    case 'areascope': S.areaScope = el.dataset.v; S.keepScroll = true; render(); break;
     case 'addsub': {
       const d = ensureDraft(); const c = d.categories[Number(el.dataset.i)];
       c.subs = c.subs || []; c.subs.push({ name: '', icon: '🏷️', price: 0 }); S.keepScroll = true; render();
